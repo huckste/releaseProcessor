@@ -1,54 +1,46 @@
 namespace ReleaseProcessor.Services;
 
-using ReleaseProcessor.Modules;
+using System.Collections.Concurrent;
+using ReleaseProcessor.Models;
 
 public class FileDistributor
 {
-  public static Dictionary<string, List<NewFile>> GroupFiles(Dictionary<string, string> fileDict)
-  {
-    var fileGroups = new Dictionary<string, List<NewFile>>();
-    int groupNumber = 1;
-    string fileBaseName = "PTF0";
-
-    for (int i = 1; i <= 5; i++)
+    public static ConcurrentDictionary<string, Label> GroupFiles(
+        ConcurrentDictionary<string, Label> labels
+    )
     {
-      fileGroups.Add($"{fileBaseName}{i}", []);
+        int groupNumber = 1;
+        string dirBase = $"/home/huckste/Scripts/ind-as10/BARPRN/PTF/PTF0";
+        // string folderPath = $"\\ind-as10\\BARPRN\\PTF\\{folderName}";
+
+        foreach (var entry in labels)
+        {
+            var label = entry.Value;
+            label.FilePath = $"{dirBase}{groupNumber}/{label.CartonID}.txt";
+            label.Directory = $"{dirBase}{groupNumber}";
+
+            groupNumber++;
+
+            if (groupNumber > 5)
+                groupNumber = 1;
+        }
+
+        return labels;
     }
 
-    foreach (var entry in fileDict)
+    public static async Task MoveFiles(ConcurrentDictionary<string, Label> labels)
     {
-      var file = new NewFile
-      {
-        FileName = entry.Key,
-        FileData = entry.Value
-      };
+        var writeTasks = new List<Task>();
 
-      fileGroups[$" {fileBaseName}{groupNumber}"].Add(file);
-      groupNumber++;
+        foreach (var entry in labels)
+        {
+            var label = entry.Value;
 
-      if (groupNumber > 5)
-        groupNumber = 1;
+            Directory.CreateDirectory(label.Directory);
+
+            writeTasks.Add(File.WriteAllTextAsync(label.FilePath, label.Data));
+        }
+
+        await Task.WhenAll(writeTasks);
     }
-
-    return fileGroups;
-  }
-
-  public static async void MoveFiles(Dictionary<string, List<NewFile>> fileGroups)
-  {
-    var writeTasks = new List<Task>();
-
-    foreach (var folder in fileGroups)
-    {
-      string folderName = folder.Key;
-      string folderPath = $"\\ind-as10\\BARPRN\\PTF\\{folderName}";
-
-      foreach (var file in folder.Value)
-      {
-        string filePath = Path.Combine(folderPath, file.FileName);
-        writeTasks.Add(File.WriteAllTextAsync(filePath, file.FileData));
-      }
-    }
-
-    await Task.WhenAll(writeTasks);
-  }
 }
