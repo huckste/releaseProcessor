@@ -4,11 +4,11 @@ namespace ReleaseProcessor.UI;
 
 public class EndScreen
 {
-    public void Show(int totalFiles, int completed, int failures, TimeSpan totalTime)
+    public void Show(int totalJobs, int completed, int failures, TimeSpan totalTime)
     {
         AnsiConsole.Clear();
 
-        var successRate = totalFiles > 0 ? (completed * 100 / totalFiles) : 0;
+        var successRate = totalJobs > 0 ? (completed * 100 / totalJobs) : 0;
         var successColor =
             successRate >= 90 ? "green"
             : successRate >= 70 ? "yellow"
@@ -18,7 +18,7 @@ public class EndScreen
         var statsContent = new Rows(
             new Rule("[bold green]Processing Complete[/]").RuleStyle("green"),
             new Text(""),
-            new Markup($"Total Labels: [blue]{totalFiles}[/]").Centered(),
+            new Markup($"Total Jobs: [blue]{totalJobs}[/]").Centered(),
             new Markup($"Completed: [green]{completed}[/]").Centered(),
             new Markup(
                 $"Failures: {(failures > 0 ? $"[red]{failures}[/]" : $"[grey]{failures}[/]")}"

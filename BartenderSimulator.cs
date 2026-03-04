@@ -1,5 +1,7 @@
 namespace ReleaseProcessor;
 
+using ReleaseProcessor.Configuration;
+
 /// <summary>
 /// Simulates Bartender processing files in PTF folders
 /// - Processes 1 file per folder at a time
@@ -36,11 +38,14 @@ public class BartenderSimulator(string[] ptfFolders)
                     continue;
                 }
 
-                var txtFiles = Directory.GetFiles(folderPath, "*.txt");
+                var txtFiles = Directory
+                    .GetFiles(folderPath, "*.txt")
+                    .OrderBy(f => File.GetCreationTime(f))
+                    .ToArray();
 
                 if (txtFiles.Length > 0)
                 {
-                    // Pick the first .txt file
+                    // Pick the oldest .txt file (first in queue)
                     var fileToProcess = txtFiles[0];
                     await ProcessFile(fileToProcess, cancellationToken);
                 }
@@ -88,16 +93,15 @@ public class BartenderSimulator(string[] ptfFolders)
             else
             {
                 // Rename to .Completed
-                var completedPath = Path.Combine(directory, $"{baseFileName}.Completed");
-                File.Move(processedPath, completedPath);
+                var completedPath = Path.Combine(directory, $"{baseFileName}.Processed");
 
                 // Optional: Move to Complete folder after a short delay
                 await Task.Delay(1000, cancellationToken);
 
-                var completeFolder = "/home/huckste/Scripts/ind-as10/PrintToFile/Complete";
-                if (Directory.Exists(completeFolder))
+                var settings = ConfigurationManager.Current;
+                if (settings != null && Directory.Exists(settings.CompletedFolder))
                 {
-                    var finalPath = Path.Combine(completeFolder, $"{baseFileName}.Prn");
+                    var finalPath = Path.Combine(settings.CompletedFolder, $"{baseFileName}.PRN");
                     File.Move(completedPath, finalPath);
                 }
             }

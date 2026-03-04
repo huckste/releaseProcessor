@@ -2,49 +2,77 @@ namespace ReleaseProcessor.Services;
 
 using System.Collections.Concurrent;
 using System.Text;
-using System.Threading.Tasks;
 using ReleaseProcessor.Models;
 
-public class FileParser
+/// <summary>
+/// Parses SINGLEPICK.POP file and extracts print jobs.
+/// Each line is caret-delimited (^) with fields like wave number and carton ID.
+/// </summary>
+public class SinglePickParser
 {
-    public static async Task<ConcurrentDictionary<string, Label>> ReadFileAsync()
+    // Field positions in caret-delimited line
+    private const int WAVE_NUMBER_FIELD = 23;
+    private const int CARTON_ID_FIELD = 30;
+    private const char FIELD_DELIMITER = '^';
+
+    /// <summary>
+    /// Parses the SinglePick file and returns all print jobs with the wave number.
+    /// </summary>
+    public static async Task<(ConcurrentDictionary<string, PrintJob> Jobs, string WaveNumber)> ParseAsync(
+        string singlePickFilePath
+    )
     {
-        // string directory = "C:\\SinglePick";
-        string directory = "/home/huckste/Scripts/Single Pick/SINGLEPICK.POP";
+        var jobs = new ConcurrentDictionary<string, PrintJob>();
+        string? waveNumber = null;
 
-        var labels = new ConcurrentDictionary<string, Label>();
-
-        await foreach (string line in File.ReadLinesAsync(directory))
+        await foreach (string rawLine in File.ReadLinesAsync(singlePickFilePath))
         {
-            var label = new Label { CartonID = $"{ExtractBarcode(line)}", Data = line };
-            labels.TryAdd(label.CartonID, label);
+            var (cartonId, wave) = ExtractFields(rawLine);
+
+            var job = new PrintJob
+            {
+                CartonId = cartonId,
+                WaveNumber = wave,
+                RawPrintData = rawLine,
+            };
+
+            jobs.TryAdd(job.CartonId, job);
+            waveNumber ??= wave;
         }
 
-        return labels;
+        return (jobs, waveNumber ?? "unknown");
     }
 
-    private static string ExtractBarcode(string line)
+    private static (string CartonId, string WaveNumber) ExtractFields(string rawLine)
     {
-        int fieldNumber = 30;
-        char delimiter = '^';
-        var fieldValue = new StringBuilder();
+        var cartonId = new StringBuilder();
+        var waveNumber = new StringBuilder();
         int currentField = 1;
 
-        for (int i = 0; i < line.Length; i++)
+        for (int i = 0; i < rawLine.Length; i++)
         {
-            if (line[i] == delimiter)
+            if (rawLine[i] == FIELD_DELIMITER)
+            {
                 currentField++;
+                continue;
+            }
 
-            if (currentField == fieldNumber && line[i] != delimiter)
-                fieldValue.Append(line[i]);
+            if (currentField == CARTON_ID_FIELD && !char.IsWhiteSpace(rawLine[i]))
+                cartonId.Append(rawLine[i]);
 
-            if (currentField > fieldNumber)
+            if (currentField == WAVE_NUMBER_FIELD && !char.IsWhiteSpace(rawLine[i]))
+                waveNumber.Append(rawLine[i]);
+
+            if (currentField > CARTON_ID_FIELD)
                 break;
         }
 
-        if (fieldValue.Length != 20)
-            throw new ArgumentOutOfRangeException(line);
+        if (cartonId.Length != 20)
+            throw new ArgumentException($"Invalid carton ID length: {cartonId}");
 
-        return fieldValue.ToString();
+        if (waveNumber.Length != 6)
+            throw new ArgumentException($"Invalid wave number length: {waveNumber}");
+
+        return (cartonId.ToString(), waveNumber.ToString());
     }
 }
