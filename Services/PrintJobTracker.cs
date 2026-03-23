@@ -14,6 +14,9 @@ public class PrintJobTracker(ConcurrentDictionary<string, PrintJob> jobs)
     private readonly HashSet<PrintJob> _completedJobs = [];
     private readonly HashSet<PrintJob> _failedJobs = [];
     private readonly int _totalJobCount = jobs.Count;
+    private readonly object _completedJobsLock = new();
+    private double _lastJobSeconds = 0;
+    private double _avgSecondsPerJob = 0;
 
     public event EventHandler<DashboardUpdateEventArgs>? DashboardUpdate;
     public event EventHandler? AllJobsCompleted;
@@ -22,7 +25,7 @@ public class PrintJobTracker(ConcurrentDictionary<string, PrintJob> jobs)
     public int TotalJobs => _totalJobCount;
     public int CompletedCount => _completedJobs.Count;
     public int FailedCount => _failedJobs.Count;
-    public bool HasPendingJobs => _activeJobs.Count > 0;
+    public bool HasPendingJobs => !_activeJobs.IsEmpty;
 
     /// <summary>
     /// Pushes initial state to dashboard
@@ -74,6 +77,7 @@ public class PrintJobTracker(ConcurrentDictionary<string, PrintJob> jobs)
 
         // If ProcessingStartedAt wasn't set, use fallback so estimation doesn't break
         job.ProcessingStartedAt ??= job.CompletedAt;
+        _lastJobSeconds = (job.CompletedAt!.Value - job.ProcessingStartedAt!.Value).TotalSeconds;
 
         MarkJobCompleted(job);
         RaiseDashboardUpdate();
@@ -109,11 +113,14 @@ public class PrintJobTracker(ConcurrentDictionary<string, PrintJob> jobs)
             await Task.Delay(500);
 
             _activeJobs.TryRemove(job.CartonId, out _);
-            _completedJobs.Add(job);
+
+            lock (_completedJobsLock)
+              _completedJobs.Add(job);
+
             RaiseDashboardUpdate();
 
             // Check if all jobs are done
-            if (_activeJobs.Count == 0 && _totalJobCount > 0)
+            if (_activeJobs.IsEmpty && _totalJobCount > 0)
             {
                 AllJobsCompleted?.Invoke(this, EventArgs.Empty);
             }
@@ -135,24 +142,21 @@ public class PrintJobTracker(ConcurrentDictionary<string, PrintJob> jobs)
 
     private string CalculateEstimatedTimeRemaining()
     {
-        var completedWithTimes = _completedJobs
-            .Where(job => job.CompletedAt.HasValue && job.ProcessingStartedAt.HasValue)
-            .ToList();
 
-        if (completedWithTimes.Count == 0)
-            return "Calculating...";
+      if (_completedJobs.Count < 5)
+        return "Calculating...";
 
-        var avgSecondsPerJob = completedWithTimes.Average(job =>
-            (job.CompletedAt!.Value - job.ProcessingStartedAt!.Value).TotalSeconds
-        );
+      double workers = _activeJobs.Count >= 5 ? 5.0 : _activeJobs.Count;
+      
+      _avgSecondsPerJob = (0.3 * _lastJobSeconds) + (0.7 * _avgSecondsPerJob);
+    
+      var timeSpan = TimeSpan.FromSeconds(_avgSecondsPerJob * _activeJobs.Count / workers);
 
-        var timeSpan = TimeSpan.FromSeconds(avgSecondsPerJob * _activeJobs.Count);
-
-        if (timeSpan.TotalHours >= 1)
-            return $"{(int)timeSpan.TotalHours}h {timeSpan.Minutes}m";
-        else if (timeSpan.TotalMinutes >= 1)
-            return $"{(int)timeSpan.TotalMinutes}m {timeSpan.Seconds}s";
-        else
-            return $"{timeSpan.Seconds}s";
+      if (timeSpan.TotalHours >= 1)
+        return $"{(int)timeSpan.TotalHours}h {timeSpan.Minutes}m";
+      else if (timeSpan.TotalMinutes >= 1)
+        return $"{(int)timeSpan.TotalMinutes}m {timeSpan.Seconds}s";
+      else
+        return $"{timeSpan.Seconds}s";
     }
 }

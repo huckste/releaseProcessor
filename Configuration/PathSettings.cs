@@ -97,12 +97,12 @@ public class PathSettings
             SinglePickFilePath = @"C:\Single Pick\SINGLEPICK.POP",
             PtfBasePath = @"\\IND-AS10\BARPRN\PTF",
             BuildFolder = @"\\IND-AS10\BARPRN\PrintToFile\Build",
-            CompletedFolder = @"\\IND-AS10\BARPRN\PrintToFile\Completed",
+            CompletedFolder = @"\\IND-AS10\BARPRN\PrintToFile\Complete",
             DeliveryFolder = @"\\indfs01\SinglePick",
             PtfArchiveFolder = @"\\IND-AS10\BARPRN\PrintToFile\Archive",
-            PrnArchiveFolder = @"\\IND-AS10\BARPRN\prnproc_archive",
-            FailedFolder = @"C:\Failed",
-            LogsFolder = @"C:\Logs",
+            PrnArchiveFolder = @"\\IND-AS10\prnproc_archive",
+            FailedFolder = @"C:\Scripts\Failed",
+            LogsFolder = @"C:\Scripts\Logs",
             PtfFolderCount = 5,
         };
     }

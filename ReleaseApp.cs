@@ -96,7 +96,7 @@ public class ReleaseApp
         };
 
         // Start Bartender simulator in background
-        var bartenderTask = Task.Run(() => bartender.Start(cts.Token));
+        // var bartenderTask = Task.Run(() => bartender.Start(cts.Token));
         var startTime = DateTime.Now;
 
         // Write job files and start dashboard
@@ -144,14 +144,14 @@ public class ReleaseApp
         string waveNumber
     )
     {
-        var timestamp = DateTime.Now.ToString("yyyy-MM-dd");
+        var timestamp = DateTime.Now.ToString("yyyyMMddHHmmss");
 
         // Archive PTF files (original .txt files now as .Processed)
-        var ptfArchivePath = Path.Combine(settings.PtfArchiveFolder, $"{waveNumber}_{timestamp}.zip");
+        var ptfArchivePath = Path.Combine(settings.PtfArchiveFolder, $"completed_{timestamp}.zip");
         var ptfFilesToDelete = ArchiveService.CreateArchive(ptfArchivePath, ptfFolders);
 
         // Archive PRN files
-        var prnArchivePath = Path.Combine(settings.PrnArchiveFolder, $"{waveNumber}_{timestamp}.zip");
+        var prnArchivePath = Path.Combine(settings.PrnArchiveFolder, $"bartender_prnproc - Copy_PTFPRNFiles_{timestamp}.zip");
         var prnFilesToDelete = ArchiveService.CreateArchive(prnArchivePath, settings.CompletedFolder);
 
         // Move PRN files to delivery folder
