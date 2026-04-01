@@ -7,7 +7,7 @@ namespace ReleaseProcessor.Configuration;
 public class PathSettings
 {
     // Input
-    public string SinglePickFilePath { get; set; } = string.Empty;
+    public string SinglePickFolder { get; set; } = string.Empty;
 
     // PTF folders (where Bartender picks up files)
     public string PtfBasePath { get; set; } = string.Empty;
@@ -23,10 +23,12 @@ public class PathSettings
     // Archives
     public string PtfArchiveFolder { get; set; } = string.Empty;
     public string PrnArchiveFolder { get; set; } = string.Empty;
+    public string SinglePickArchiveFolder { get; set; } = string.Empty;
 
     // Other
     public string FailedFolder { get; set; } = string.Empty;
     public string LogsFolder { get; set; } = string.Empty;
+    public string AvailableFilesFolder { get; set; } = string.Empty;
 
     /// <summary>
     /// Gets all PTF folder paths (PTF01, PTF02, etc.)
@@ -48,13 +50,15 @@ public class PathSettings
     {
         var folders = new List<string>
         {
-            Path.GetDirectoryName(SinglePickFilePath) ?? string.Empty,
+            SinglePickFolder,
             PtfBasePath,
             BuildFolder,
             CompletedFolder,
             DeliveryFolder,
             PtfArchiveFolder,
             PrnArchiveFolder,
+            SinglePickArchiveFolder,
+            AvailableFilesFolder,
             FailedFolder,
             LogsFolder,
         };
@@ -74,7 +78,7 @@ public class PathSettings
 
         return new PathSettings
         {
-            SinglePickFilePath = Path.Combine(scriptsDir, "Single Pick", "SINGLEPICK.POP"),
+            SinglePickFolder = Path.Combine(scriptsDir, "Single Pick"),
             PtfBasePath = Path.Combine(scriptsDir, "ind-as10", "BARPRN", "PTF"),
             BuildFolder = Path.Combine(scriptsDir, "ind-as10", "PrintToFile", "Build"),
             CompletedFolder = Path.Combine(scriptsDir, "ind-as10", "PrintToFile", "Completed"),
@@ -94,7 +98,7 @@ public class PathSettings
     {
         return new PathSettings
         {
-            SinglePickFilePath = @"C:\Single Pick\SINGLEPICK.POP",
+            SinglePickFolder = @"C:\Single Pick",
             PtfBasePath = @"\\IND-AS10\BARPRN\PTF",
             BuildFolder = @"\\IND-AS10\BARPRN\PrintToFile\Build",
             CompletedFolder = @"\\IND-AS10\BARPRN\PrintToFile\Complete",
@@ -103,6 +107,8 @@ public class PathSettings
             PrnArchiveFolder = @"\\IND-AS10\prnproc_archive",
             FailedFolder = @"C:\Scripts\Failed",
             LogsFolder = @"C:\Scripts\Logs",
+            AvailableFilesFolder = @"\\ind-as84\asroot$\labels",
+            SinglePickArchiveFolder = @"C:\Single Pick\Archive",
             PtfFolderCount = 5,
         };
     }

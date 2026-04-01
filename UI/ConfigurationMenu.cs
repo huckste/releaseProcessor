@@ -6,14 +6,9 @@ using Spectre.Console;
 /// <summary>
 /// Interactive menu for configuring folder paths
 /// </summary>
-public class ConfigurationMenu
+public class ConfigurationMenu(PathSettings? existingSettings = null)
 {
-    private PathSettings _settings;
-
-    public ConfigurationMenu(PathSettings? existingSettings = null)
-    {
-        _settings = existingSettings ?? PathSettings.GetDefaults();
-    }
+    private PathSettings _settings = existingSettings ?? PathSettings.GetDefaults();
 
     public void Run()
     {
@@ -35,16 +30,14 @@ public class ConfigurationMenu
         var choice = AnsiConsole.Prompt(
             new SelectionPrompt<string>()
                 .HighlightStyle(new Style(Color.Blue))
-                .AddChoices(
-                    [
-                        "  Edit Paths",
-                        "  Validate",
-                        "  Load Defaults",
-                        "  Load Production",
-                        "  Save",
-                        "  Back",
-                    ]
-                )
+                .AddChoices([
+                    "  Edit Paths",
+                    "  Validate",
+                    "  Load Defaults",
+                    "  Load Production",
+                    "  Save",
+                    "  Back",
+                ])
         );
 
         return choice switch
@@ -70,7 +63,7 @@ public class ConfigurationMenu
 
             var choices = new List<string>
             {
-                $"  SinglePick     {Truncate(_settings.SinglePickFilePath)}",
+                $"  SinglePick     {Truncate(_settings.SinglePickFolder)}",
                 $"  PTF Base       {Truncate(_settings.PtfBasePath)}",
                 $"  Build          {Truncate(_settings.BuildFolder)}",
                 $"  Completed      {Truncate(_settings.CompletedFolder)}",
@@ -78,6 +71,8 @@ public class ConfigurationMenu
                 $"  PRN Archive    {Truncate(_settings.PrnArchiveFolder)}",
                 $"  PTF Archive    {Truncate(_settings.PtfArchiveFolder)}",
                 $"  Failed         {Truncate(_settings.FailedFolder)}",
+                $"  Available Files {Truncate(_settings.AvailableFilesFolder)}",
+                $"  Single Pick Arhchive {Truncate(_settings.SinglePickArchiveFolder)}",
                 $"  Logs           {Truncate(_settings.LogsFolder)}",
                 $"  PTF Count      {_settings.PtfFolderCount}",
                 "  Back",
@@ -94,19 +89,40 @@ public class ConfigurationMenu
                 return false;
 
             if (choice.Contains("SinglePick"))
-                EditPath("SinglePick File", _settings.SinglePickFilePath, v => _settings.SinglePickFilePath = v, isFile: true);
+                EditPath(
+                    "SinglePick Folder",
+                    _settings.SinglePickFolder,
+                    v => _settings.SinglePickFolder = v,
+                    isFile: true
+                );
             else if (choice.Contains("PTF Base"))
                 EditPath("PTF Base Path", _settings.PtfBasePath, v => _settings.PtfBasePath = v);
             else if (choice.Contains("Build"))
                 EditPath("Build Folder", _settings.BuildFolder, v => _settings.BuildFolder = v);
             else if (choice.Contains("Completed"))
-                EditPath("Completed Folder", _settings.CompletedFolder, v => _settings.CompletedFolder = v);
+                EditPath(
+                    "Completed Folder",
+                    _settings.CompletedFolder,
+                    v => _settings.CompletedFolder = v
+                );
             else if (choice.Contains("Delivery"))
-                EditPath("Delivery Folder", _settings.DeliveryFolder, v => _settings.DeliveryFolder = v);
+                EditPath(
+                    "Delivery Folder",
+                    _settings.DeliveryFolder,
+                    v => _settings.DeliveryFolder = v
+                );
             else if (choice.Contains("PRN Archive"))
-                EditPath("PRN Archive Folder", _settings.PrnArchiveFolder, v => _settings.PrnArchiveFolder = v);
+                EditPath(
+                    "PRN Archive Folder",
+                    _settings.PrnArchiveFolder,
+                    v => _settings.PrnArchiveFolder = v
+                );
             else if (choice.Contains("PTF Archive"))
-                EditPath("PTF Archive Folder", _settings.PtfArchiveFolder, v => _settings.PtfArchiveFolder = v);
+                EditPath(
+                    "PTF Archive Folder",
+                    _settings.PtfArchiveFolder,
+                    v => _settings.PtfArchiveFolder = v
+                );
             else if (choice.Contains("Failed"))
                 EditPath("Failed Folder", _settings.FailedFolder, v => _settings.FailedFolder = v);
             else if (choice.Contains("Logs"))
@@ -116,7 +132,12 @@ public class ConfigurationMenu
         }
     }
 
-    private void EditPath(string name, string currentValue, Action<string> setter, bool isFile = false)
+    private static void EditPath(
+        string name,
+        string currentValue,
+        Action<string> setter,
+        bool isFile = false
+    )
     {
         AnsiConsole.WriteLine();
         AnsiConsole.MarkupLine($"[dim]{name}[/]");
@@ -139,11 +160,17 @@ public class ConfigurationMenu
 
             if (isFile)
             {
-                AnsiConsole.MarkupLine(File.Exists(newValue) ? "[green]File exists[/]" : "[yellow]File not found[/]");
+                AnsiConsole.MarkupLine(
+                    File.Exists(newValue) ? "[green]File exists[/]" : "[yellow]File not found[/]"
+                );
             }
             else
             {
-                AnsiConsole.MarkupLine(Directory.Exists(newValue) ? "[green]Directory exists[/]" : "[yellow]Will be created[/]");
+                AnsiConsole.MarkupLine(
+                    Directory.Exists(newValue)
+                        ? "[green]Directory exists[/]"
+                        : "[yellow]Will be created[/]"
+                );
             }
 
             WaitForKey();
@@ -156,7 +183,10 @@ public class ConfigurationMenu
         AnsiConsole.MarkupLine($"[dim]Current PTF folder count:[/] {_settings.PtfFolderCount}");
         AnsiConsole.WriteLine();
 
-        var input = AnsiConsole.Ask<string>("[dim]New count 1-10 ([blue]Enter[/] to keep):[/] ", "");
+        var input = AnsiConsole.Ask<string>(
+            "[dim]New count 1-10 ([blue]Enter[/] to keep):[/] ",
+            ""
+        );
 
         if (!string.IsNullOrEmpty(input) && int.TryParse(input, out int count))
         {

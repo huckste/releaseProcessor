@@ -1,10 +1,11 @@
+using ReleaseProcessor.Services;
 using Spectre.Console;
 
 namespace ReleaseProcessor.UI;
 
 public class EndScreen
 {
-    public void Show(int totalJobs, int completed, int failures, TimeSpan totalTime)
+    public static void Show(int totalJobs, int completed, int failures, TimeSpan totalTime)
     {
         AnsiConsole.Clear();
 

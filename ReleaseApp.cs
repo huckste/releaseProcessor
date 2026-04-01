@@ -14,7 +14,7 @@ public class ReleaseApp
         ConfigurationManager.LoadOrCreateDefault();
     }
 
-    public async Task Run()
+    public static async Task Run()
     {
         while (true)
         {
@@ -37,15 +37,30 @@ public class ReleaseApp
         }
     }
 
-    private async Task RunProcessing()
+    private static async Task RunProcessing()
     {
+        var candidates = SinglePickScanner.GetUnprocessedFiles();
+
+        if (candidates.Count == 0)
+        {
+            Spectre.Console.AnsiConsole.MarkupLine("[yellow]No files to process.[/]");
+            LaunchMenu.WaitForKey();
+            return;
+        }
+
+        var selected =
+            candidates.Count == 1 ? candidates[0] : LaunchMenu.ShowFileSelection(candidates);
+
+        var copiedFile = SinglePickScanner.CopyFile(selected);
         var settings = ConfigurationManager.Current!;
 
         // Validate configuration before running
         var errors = ConfigurationManager.ValidatePaths(settings);
         if (errors.Count > 0)
         {
-            Spectre.Console.AnsiConsole.MarkupLine("[red]Cannot run - configuration has errors:[/]");
+            Spectre.Console.AnsiConsole.MarkupLine(
+                "[red]Cannot run - configuration has errors:[/]"
+            );
             foreach (var error in errors)
             {
                 Spectre.Console.AnsiConsole.MarkupLine($"  [red]- {error}[/]");
@@ -61,7 +76,7 @@ public class ReleaseApp
         CleanupLeftoverFiles(ptfFolders, settings.CompletedFolder);
 
         // Parse SinglePick file
-        var (jobs, waveNumber) = await SinglePickParser.ParseAsync(settings.SinglePickFilePath);
+        var jobs = await SinglePickParser.ParseAsync(copiedFile);
 
         // Assign jobs to PTF folders
         PtfDistributor.AssignJobsToFolders(jobs, ptfFolders);
@@ -115,7 +130,7 @@ public class ReleaseApp
 
             if (completedSuccessfully)
             {
-                ArchiveAndDeliver(settings, ptfFolders, waveNumber);
+                ArchiveAndDeliver(settings, ptfFolders);
             }
             else
             {
@@ -123,7 +138,15 @@ public class ReleaseApp
                 CleanupLeftoverFiles(ptfFolders, settings.CompletedFolder);
             }
 
-            endScreen.Show(
+            await TeamsNotification.PostAsync(
+                jobTracker.TotalJobs,
+                jobTracker.CompletedCount,
+                jobTracker.FailedCount,
+                totalTime,
+                Path.GetFileName(copiedFile)
+            );
+
+            EndScreen.Show(
                 jobTracker.TotalJobs,
                 jobTracker.CompletedCount,
                 jobTracker.FailedCount,
@@ -138,11 +161,7 @@ public class ReleaseApp
         ArchiveService.ClearFolder(completedFolder);
     }
 
-    private static void ArchiveAndDeliver(
-        PathSettings settings,
-        List<string> ptfFolders,
-        string waveNumber
-    )
+    private static void ArchiveAndDeliver(PathSettings settings, List<string> ptfFolders)
     {
         var timestamp = DateTime.Now.ToString("yyyyMMddHHmmss");
 
@@ -151,11 +170,19 @@ public class ReleaseApp
         var ptfFilesToDelete = ArchiveService.CreateArchive(ptfArchivePath, ptfFolders);
 
         // Archive PRN files
-        var prnArchivePath = Path.Combine(settings.PrnArchiveFolder, $"bartender_prnproc - Copy_PTFPRNFiles_{timestamp}.zip");
-        var prnFilesToDelete = ArchiveService.CreateArchive(prnArchivePath, settings.CompletedFolder);
+        var prnArchivePath = Path.Combine(
+            settings.PrnArchiveFolder,
+            $"bartender_prnproc - Copy_PTFPRNFiles_{timestamp}.zip"
+        );
+        var prnFilesToDelete = ArchiveService.CreateArchive(
+            prnArchivePath,
+            settings.CompletedFolder
+        );
 
         // Move PRN files to delivery folder
         ArchiveService.MoveFiles(settings.CompletedFolder, settings.DeliveryFolder);
+
+        ArchiveService.MoveFiles(settings.SinglePickFolder, settings.SinglePickArchiveFolder);
 
         // Delete archived files
         ArchiveService.DeleteFiles(ptfFilesToDelete);

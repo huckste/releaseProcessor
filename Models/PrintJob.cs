@@ -8,7 +8,6 @@ public class PrintJob
 {
     // Identity
     public required string CartonId { get; set; }
-    public required string WaveNumber { get; set; }
 
     // The raw caret-delimited line from SINGLEPICK.POP
     public required string RawPrintData { get; set; }
@@ -37,5 +36,5 @@ public enum PrintJobStatus
     Completed,
     Failed,
     PermanentFailure,
-    Retrying
+    Retrying,
 }

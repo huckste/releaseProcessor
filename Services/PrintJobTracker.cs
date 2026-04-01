@@ -14,7 +14,7 @@ public class PrintJobTracker(ConcurrentDictionary<string, PrintJob> jobs)
     private readonly HashSet<PrintJob> _completedJobs = [];
     private readonly HashSet<PrintJob> _failedJobs = [];
     private readonly int _totalJobCount = jobs.Count;
-    private readonly object _completedJobsLock = new();
+    private readonly Lock _completedJobsLock = new();
     private double _lastJobSeconds = 0;
     private double _avgSecondsPerJob = 0;
 
@@ -115,7 +115,7 @@ public class PrintJobTracker(ConcurrentDictionary<string, PrintJob> jobs)
             _activeJobs.TryRemove(job.CartonId, out _);
 
             lock (_completedJobsLock)
-              _completedJobs.Add(job);
+                _completedJobs.Add(job);
 
             RaiseDashboardUpdate();
 
@@ -142,21 +142,18 @@ public class PrintJobTracker(ConcurrentDictionary<string, PrintJob> jobs)
 
     private string CalculateEstimatedTimeRemaining()
     {
+        if (_completedJobs.Count == 0)
+            return "Calculating...";
 
-      if (_completedJobs.Count < 5)
-        return "Calculating...";
+        _avgSecondsPerJob = (0.3 * _lastJobSeconds) + (0.7 * _avgSecondsPerJob);
 
-      double workers = _activeJobs.Count >= 5 ? 5.0 : _activeJobs.Count;
-      
-      _avgSecondsPerJob = (0.3 * _lastJobSeconds) + (0.7 * _avgSecondsPerJob);
-    
-      var timeSpan = TimeSpan.FromSeconds(_avgSecondsPerJob * _activeJobs.Count / workers);
+        var timeSpan = TimeSpan.FromSeconds(_lastJobSeconds * _activeJobs.Count / 5.0);
 
-      if (timeSpan.TotalHours >= 1)
-        return $"{(int)timeSpan.TotalHours}h {timeSpan.Minutes}m";
-      else if (timeSpan.TotalMinutes >= 1)
-        return $"{(int)timeSpan.TotalMinutes}m {timeSpan.Seconds}s";
-      else
-        return $"{timeSpan.Seconds}s";
+        if (timeSpan.TotalHours >= 1)
+            return $"{(int)timeSpan.TotalHours}h {timeSpan.Minutes}m";
+        else if (timeSpan.TotalMinutes >= 1)
+            return $"{(int)timeSpan.TotalMinutes}m {timeSpan.Seconds}s";
+        else
+            return $"{timeSpan.Seconds}s";
     }
 }

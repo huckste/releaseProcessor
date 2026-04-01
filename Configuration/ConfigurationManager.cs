@@ -14,13 +14,12 @@ public static class ConfigurationManager
         ConfigFileName
     );
 
-    private static readonly JsonSerializerOptions JsonOptions =
-        new()
-        {
-            WriteIndented = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        };
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+    };
 
     /// <summary>
     /// Current loaded configuration
@@ -101,13 +100,13 @@ public static class ConfigurationManager
         var errors = new List<string>();
 
         // Check SinglePickFilePath exists
-        if (string.IsNullOrWhiteSpace(settings.SinglePickFilePath))
+        if (string.IsNullOrWhiteSpace(settings.SinglePickFolder))
         {
-            errors.Add("SinglePick file path is not configured");
+            errors.Add("SinglePick folder is not configured");
         }
-        else if (!File.Exists(settings.SinglePickFilePath))
+        else if (Directory.GetFiles(settings.SinglePickFolder, "*.SNGL").Length == 0)
         {
-            errors.Add($"SinglePick file not found: {settings.SinglePickFilePath}");
+            errors.Add($"No SinglePick files found: {settings.SinglePickFolder}");
         }
 
         // Check directories can be accessed/created
@@ -119,6 +118,8 @@ public static class ConfigurationManager
             { "Delivery Folder", settings.DeliveryFolder },
             { "PTF Archive Folder", settings.PtfArchiveFolder },
             { "PRN Archive Folder", settings.PrnArchiveFolder },
+            { "Available Files", settings.AvailableFilesFolder },
+            { "Single Pick Archive", settings.SinglePickArchiveFolder },
             { "Failed Folder", settings.FailedFolder },
             { "Logs Folder", settings.LogsFolder },
         };

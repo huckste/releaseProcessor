@@ -25,7 +25,10 @@ public class FolderWatcher
         }
 
         // Watch Completed folder for new PRN files
-        var completedWatcher = new FileSystemWatcher(completedFolder) { EnableRaisingEvents = true };
+        var completedWatcher = new FileSystemWatcher(completedFolder)
+        {
+            EnableRaisingEvents = true,
+        };
         completedWatcher.Created += OnPrnFileCreated;
         _watchers.Add(completedWatcher);
     }
@@ -76,7 +79,7 @@ public class FolderWatcher
             "processed" => PrintJobStatus.Processing,
             "failed" => PrintJobStatus.Failed,
             "prn" => PrintJobStatus.Completed,
-            _ => PrintJobStatus.Pending
+            _ => PrintJobStatus.Pending,
         };
     }
 }
