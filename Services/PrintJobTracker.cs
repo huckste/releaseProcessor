@@ -142,12 +142,11 @@ public class PrintJobTracker(ConcurrentDictionary<string, PrintJob> jobs)
 
     private string CalculateEstimatedTimeRemaining()
     {
-        if (_completedJobs.Count == 0)
+        if (_completedJobs.Count > 5)
             return "Calculating...";
 
         _avgSecondsPerJob = (0.3 * _lastJobSeconds) + (0.7 * _avgSecondsPerJob);
-
-        var timeSpan = TimeSpan.FromSeconds(_lastJobSeconds * _activeJobs.Count / 5.0);
+        var timeSpan = TimeSpan.FromSeconds(_avgSecondsPerJob * _activeJobs.Count / 5.0);
 
         if (timeSpan.TotalHours >= 1)
             return $"{(int)timeSpan.TotalHours}h {timeSpan.Minutes}m";
