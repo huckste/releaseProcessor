@@ -194,7 +194,7 @@ public class Dashboard()
     private static string FormatEta(string? eta)
     {
         if (string.IsNullOrEmpty(eta) || eta == "Calculating...")
-            return "00:00:00";
+            return "Calculating";
 
         // Parse formats like "1h 30m", "5m 30s", "30s"
         int hours = 0,

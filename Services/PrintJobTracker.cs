@@ -78,6 +78,7 @@ public class PrintJobTracker(ConcurrentDictionary<string, PrintJob> jobs)
         // If ProcessingStartedAt wasn't set, use fallback so estimation doesn't break
         job.ProcessingStartedAt ??= job.CompletedAt;
         _lastJobSeconds = (job.CompletedAt!.Value - job.ProcessingStartedAt!.Value).TotalSeconds;
+        _avgSecondsPerJob = (0.3 * _lastJobSeconds) + (0.7 * _avgSecondsPerJob);
 
         MarkJobCompleted(job);
         RaiseDashboardUpdate();
@@ -142,11 +143,12 @@ public class PrintJobTracker(ConcurrentDictionary<string, PrintJob> jobs)
 
     private string CalculateEstimatedTimeRemaining()
     {
-        if (_completedJobs.Count > 5)
+        if (_completedJobs.Count < 5)
             return "Calculating...";
 
-        _avgSecondsPerJob = (0.3 * _lastJobSeconds) + (0.7 * _avgSecondsPerJob);
-        var timeSpan = TimeSpan.FromSeconds(_avgSecondsPerJob * _activeJobs.Count / 5.0);
+        var timeSpan = TimeSpan.FromSeconds(
+            _avgSecondsPerJob * (_totalJobCount - _completedJobs.Count - _failedJobs.Count) / 5.0
+        );
 
         if (timeSpan.TotalHours >= 1)
             return $"{(int)timeSpan.TotalHours}h {timeSpan.Minutes}m";
