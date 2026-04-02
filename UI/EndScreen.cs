@@ -5,7 +5,14 @@ namespace ReleaseProcessor.UI;
 
 public class EndScreen
 {
-    public static void Show(int totalJobs, int completed, int failures, TimeSpan totalTime)
+    public static async Task Show(
+        int totalJobs,
+        int completed,
+        int failures,
+        TimeSpan totalTime,
+        Task? archiveTask,
+        Task? notifyTask
+    )
     {
         AnsiConsole.Clear();
 
@@ -54,15 +61,66 @@ public class EndScreen
         layout["Top"].Update(new Panel("").Border(BoxBorder.None));
         layout["Center"].Update(centerLayout);
         layout["Spacer"].Update(new Panel("").Border(BoxBorder.None));
+        var statusText = new Markup("[Yellow]Archiving...Notifying...[/]").Centered();
         layout["Bottom"]
-            .Update(
-                new Panel(new Markup("[dim]Press any key to exit...[/]").Centered())
-                    .Border(BoxBorder.Rounded)
-                    .BorderColor(Color.Grey)
-            );
+            .Update(new Panel(statusText).Border(BoxBorder.Rounded).BorderColor(Color.Yellow));
 
-        AnsiConsole.Write(layout);
-        Console.ReadKey(true);
+        await AnsiConsole
+            .Live(layout)
+            .StartAsync(async ctx =>
+            {
+                ctx.Refresh();
+
+                string archiveStatus = "[green]Archive ✓[/]";
+                string notifyStatus = "[green] Notify ✓[/]";
+
+                if (archiveTask != null)
+                {
+                    try
+                    {
+                        await archiveTask;
+                    }
+                    catch (Exception ex)
+                    {
+                        archiveStatus = $"[red]Archive x {ex.Message}[/]";
+                    }
+                    layout["Bottom"]
+                        .Update(
+                            new Panel(
+                                new Markup($"{archiveStatus} [yellow]Notifying...[/]").Centered()
+                            )
+                                .Border(BoxBorder.Rounded)
+                                .BorderColor(Color.Yellow)
+                        );
+                    ctx.Refresh();
+                }
+
+                if (notifyTask != null)
+                {
+                    try
+                    {
+                        await notifyTask;
+                    }
+                    catch (Exception ex)
+                    {
+                        notifyStatus = $"[red]Notify x {ex.Message}[/]";
+                    }
+                }
+
+                layout["Bottom"]
+                    .Update(
+                        new Panel(
+                            new Markup(
+                                $"{archiveStatus} {notifyStatus} [dim]Press any key to exit...[/]"
+                            ).Centered()
+                        )
+                            .Border(BoxBorder.Rounded)
+                            .BorderColor(Color.Green)
+                    );
+                ctx.Refresh();
+                await Task.Run(() => Console.ReadKey(true));
+            });
+
         AnsiConsole.Clear();
     }
 }

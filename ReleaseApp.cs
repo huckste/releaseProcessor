@@ -48,8 +48,8 @@ public class ReleaseApp
             return;
         }
 
-        var selected =
-            candidates.Count == 1 ? candidates[0] : LaunchMenu.ShowFileSelection(candidates);
+        // show launch menu even if only one file
+        var selected = LaunchMenu.ShowFileSelection(candidates);
 
         var copiedFile = SinglePickScanner.CopyFile(selected);
         var settings = ConfigurationManager.Current!;
@@ -85,8 +85,6 @@ public class ReleaseApp
         var folderWatcher = new FolderWatcher(ptfFolders, settings.CompletedFolder);
         var dashboard = new Dashboard();
         var jobTracker = new PrintJobTracker(jobs);
-        var bartender = new BartenderSimulator([.. ptfFolders]);
-        var endScreen = new EndScreen();
 
         // Wire up events
         folderWatcher.JobStatusChanged += jobTracker.OnJobStatusChanged;
@@ -96,6 +94,7 @@ public class ReleaseApp
 
         // Setup cancellation
         var cts = new CancellationTokenSource();
+
         Console.CancelKeyPress += (s, e) =>
         {
             e.Cancel = true;
@@ -110,8 +109,6 @@ public class ReleaseApp
             cts.Cancel();
         };
 
-        // Start Bartender simulator in background
-        // var bartenderTask = Task.Run(() => bartender.Start(cts.Token));
         var startTime = DateTime.Now;
 
         // Write job files and start dashboard
@@ -128,9 +125,11 @@ public class ReleaseApp
         {
             var totalTime = DateTime.Now - startTime;
 
+            Task? archiveTask = null;
+
             if (completedSuccessfully)
             {
-                ArchiveAndDeliver(settings, ptfFolders);
+                archiveTask = Task.Run(() => ArchiveAndDeliver(settings, ptfFolders));
             }
             else
             {
@@ -138,7 +137,7 @@ public class ReleaseApp
                 CleanupLeftoverFiles(ptfFolders, settings.CompletedFolder);
             }
 
-            await TeamsNotification.PostAsync(
+            var notifyTask = TeamsNotification.PostAsync(
                 jobTracker.TotalJobs,
                 jobTracker.CompletedCount,
                 jobTracker.FailedCount,
@@ -146,11 +145,13 @@ public class ReleaseApp
                 Path.GetFileName(copiedFile)
             );
 
-            EndScreen.Show(
+            await EndScreen.Show(
                 jobTracker.TotalJobs,
                 jobTracker.CompletedCount,
                 jobTracker.FailedCount,
-                totalTime
+                totalTime,
+                archiveTask,
+                notifyTask
             );
         }
     }

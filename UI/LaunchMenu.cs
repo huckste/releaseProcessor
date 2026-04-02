@@ -79,7 +79,7 @@ public class LaunchMenu
             new SelectionPrompt<string>()
                 .Title("[bold]Select a file to process[/]")
                 .HighlightStyle(new Style(Color.Blue))
-                .AddChoices([.. files.Select(f => Path.GetFileName(f)!)])
+                .AddChoices([.. files.Select(f => Path.GetFileName(f))])
         );
 
         return files.First(f => Path.GetFileName(f) == selected);
