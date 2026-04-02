@@ -9,6 +9,11 @@ public class SinglePickScanner
 
     public static List<string> GetUnprocessedFiles()
     {
+        if (Directory.EnumerateFiles(_settings.SinglePickArchiveFolder, "*.SNGL").Any())
+        {
+            return [.. Directory.GetFiles(_settings.SinglePickFolder, "*.SNGL")];
+        }
+
         var today = DateTime.Today;
 
         var archiveFiles = Directory
