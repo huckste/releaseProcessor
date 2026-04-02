@@ -147,6 +147,9 @@ public class PrintJobTracker(ConcurrentDictionary<string, PrintJob> jobs)
         if (_completedJobs.Count < 5)
             return "Calculating...";
 
+        if (_activeJobs.IsEmpty)
+            return "0:00:00";
+
         var timeSpan = TimeSpan.FromSeconds(
             _avgSecondsPerJob
                 * _activeJobs.Count
