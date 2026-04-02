@@ -11,7 +11,7 @@ public class EndScreen
         int failures,
         TimeSpan totalTime,
         Task? archiveTask,
-        Task? notifyTask
+        Task<string>? notifyTask
     )
     {
         AnsiConsole.Clear();
@@ -99,7 +99,10 @@ public class EndScreen
                 {
                     try
                     {
-                        await notifyTask;
+                        string? notifyTaskResult = await notifyTask;
+
+                        if (notifyTaskResult != "Accepted")
+                            notifyStatus = $"[red]Notifying x {notifyTaskResult}[/]";
                     }
                     catch (Exception ex)
                     {

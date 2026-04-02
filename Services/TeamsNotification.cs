@@ -6,7 +6,7 @@ using System.Text.Json;
 
 public class TeamsNotification
 {
-    public static async Task PostAsync(
+    public static async Task<string> PostAsync(
         int totalJobs,
         int completed,
         int failures,
@@ -111,7 +111,7 @@ public class TeamsNotification
         var content = new StringContent(json, Encoding.UTF8, "application/json");
         var response = await client.PostAsync(webhookUrl, content);
 
-        Console.WriteLine($"Status: {response.StatusCode}");
-        Console.WriteLine(await response.Content.ReadAsStringAsync());
+        return response.StatusCode.ToString();
+        // Console.WriteLine(await response.Content.ReadAsStringAsync());
     }
 }

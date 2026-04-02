@@ -17,6 +17,7 @@ public class PrintJobTracker(ConcurrentDictionary<string, PrintJob> jobs)
     private readonly Lock _completedJobsLock = new();
     private double _lastJobSeconds = 0;
     private double _avgSecondsPerJob = 0;
+    private double _lastDisplayedEtaSeconds = double.MaxValue;
 
     public event EventHandler<DashboardUpdateEventArgs>? DashboardUpdate;
     public event EventHandler? AllJobsCompleted;
@@ -147,8 +148,17 @@ public class PrintJobTracker(ConcurrentDictionary<string, PrintJob> jobs)
             return "Calculating...";
 
         var timeSpan = TimeSpan.FromSeconds(
-            _avgSecondsPerJob * (_totalJobCount - _completedJobs.Count - _failedJobs.Count) / 5.0
+            _avgSecondsPerJob
+                * _activeJobs.Count
+                / (_activeJobs.Count < 5 ? _activeJobs.Count : 5.0)
         );
+
+        var etaSeconds = timeSpan.TotalSeconds;
+
+        if (etaSeconds < _lastDisplayedEtaSeconds)
+            _lastDisplayedEtaSeconds = etaSeconds;
+
+        timeSpan = TimeSpan.FromSeconds(_lastDisplayedEtaSeconds);
 
         if (timeSpan.TotalHours >= 1)
             return $"{(int)timeSpan.TotalHours}h {timeSpan.Minutes}m";
