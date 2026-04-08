@@ -1,14 +1,15 @@
 namespace ReleaseProcessor.UI;
 
 using ReleaseProcessor.Configuration;
+using ReleaseProcessor.Models;
 using Spectre.Console;
 
 /// <summary>
 /// Interactive menu for configuring folder paths
 /// </summary>
-public class ConfigurationMenu(PathSettings? existingSettings = null)
+public class ConfigurationMenu(PathSchema? existingSettings = null)
 {
-    private PathSettings _settings = existingSettings ?? PathSettings.GetDefaults();
+    private PathSchema _settings = existingSettings ?? new PathSchema();
 
     public void Run()
     {
@@ -33,7 +34,7 @@ public class ConfigurationMenu(PathSettings? existingSettings = null)
                 .AddChoices([
                     "  Edit Paths",
                     "  Validate",
-                    "  Load Defaults",
+                    "  Load Test",
                     "  Load Production",
                     "  Save",
                     "  Back",
@@ -44,7 +45,7 @@ public class ConfigurationMenu(PathSettings? existingSettings = null)
         {
             var s when s.Contains("Edit") => EditPaths(),
             var s when s.Contains("Validate") => ValidatePaths(),
-            var s when s.Contains("Defaults") => LoadDefaults(),
+            var s when s.Contains("Test") => LoadTest(),
             var s when s.Contains("Production") => LoadProduction(),
             var s when s.Contains("Save") => Save(),
             _ => true,
@@ -61,22 +62,15 @@ public class ConfigurationMenu(PathSettings? existingSettings = null)
             AnsiConsole.WriteLine();
             AnsiConsole.WriteLine();
 
-            var choices = new List<string>
+            var choices = new List<string>();
+            var pathsDict = _settings.ToDict();
+
+            foreach (var pathDesc in pathsDict)
             {
-                $"  SinglePick     {Truncate(_settings.SinglePickFolder)}",
-                $"  PTF Base       {Truncate(_settings.PtfBasePath)}",
-                $"  Build          {Truncate(_settings.BuildFolder)}",
-                $"  Completed      {Truncate(_settings.CompletedFolder)}",
-                $"  Delivery       {Truncate(_settings.DeliveryFolder)}",
-                $"  PRN Archive    {Truncate(_settings.PrnArchiveFolder)}",
-                $"  PTF Archive    {Truncate(_settings.PtfArchiveFolder)}",
-                $"  Failed         {Truncate(_settings.FailedFolder)}",
-                $"  Available Files {Truncate(_settings.AvailableFilesFolder)}",
-                $"  Single Pick Arhchive {Truncate(_settings.SinglePickArchiveFolder)}",
-                $"  Logs           {Truncate(_settings.LogsFolder)}",
-                $"  PTF Count      {_settings.PtfFolderCount}",
-                "  Back",
-            };
+                choices.Add($"{pathDesc.Value.Name}: {Truncate(pathDesc.Value.Path)}");
+            }
+
+            choices.Add("Back");
 
             var choice = AnsiConsole.Prompt(
                 new SelectionPrompt<string>()
@@ -88,47 +82,8 @@ public class ConfigurationMenu(PathSettings? existingSettings = null)
             if (choice.Contains("Back"))
                 return false;
 
-            if (choice.Contains("SinglePick"))
-                EditPath(
-                    "SinglePick Folder",
-                    _settings.SinglePickFolder,
-                    v => _settings.SinglePickFolder = v,
-                    isFile: true
-                );
-            else if (choice.Contains("PTF Base"))
-                EditPath("PTF Base Path", _settings.PtfBasePath, v => _settings.PtfBasePath = v);
-            else if (choice.Contains("Build"))
-                EditPath("Build Folder", _settings.BuildFolder, v => _settings.BuildFolder = v);
-            else if (choice.Contains("Completed"))
-                EditPath(
-                    "Completed Folder",
-                    _settings.CompletedFolder,
-                    v => _settings.CompletedFolder = v
-                );
-            else if (choice.Contains("Delivery"))
-                EditPath(
-                    "Delivery Folder",
-                    _settings.DeliveryFolder,
-                    v => _settings.DeliveryFolder = v
-                );
-            else if (choice.Contains("PRN Archive"))
-                EditPath(
-                    "PRN Archive Folder",
-                    _settings.PrnArchiveFolder,
-                    v => _settings.PrnArchiveFolder = v
-                );
-            else if (choice.Contains("PTF Archive"))
-                EditPath(
-                    "PTF Archive Folder",
-                    _settings.PtfArchiveFolder,
-                    v => _settings.PtfArchiveFolder = v
-                );
-            else if (choice.Contains("Failed"))
-                EditPath("Failed Folder", _settings.FailedFolder, v => _settings.FailedFolder = v);
-            else if (choice.Contains("Logs"))
-                EditPath("Logs Folder", _settings.LogsFolder, v => _settings.LogsFolder = v);
-            else if (choice.Contains("PTF Count"))
-                EditPtfCount();
+            if (pathsDict.TryGetValue(choice.Split(':')[0].Trim(), out var desc))
+                EditPath(desc.Name, desc.Path, v => desc.Path = v);
         }
     }
 
@@ -144,7 +99,7 @@ public class ConfigurationMenu(PathSettings? existingSettings = null)
         AnsiConsole.MarkupLine($"[dim]Current:[/] {currentValue}");
         AnsiConsole.WriteLine();
 
-        var newValue = AnsiConsole.Ask<string>("[dim]New path ([blue]Enter[/] to keep):[/] ", "");
+        var newValue = AnsiConsole.Ask("[dim]New path ([blue]Enter[/] to keep):[/] ", "");
 
         if (!string.IsNullOrEmpty(newValue))
         {
@@ -180,7 +135,7 @@ public class ConfigurationMenu(PathSettings? existingSettings = null)
     private void EditPtfCount()
     {
         AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine($"[dim]Current PTF folder count:[/] {_settings.PtfFolderCount}");
+        AnsiConsole.MarkupLine($"[dim]Current PTF folder count:[/] {_settings.PtfDirCount}");
         AnsiConsole.WriteLine();
 
         var input = AnsiConsole.Ask<string>(
@@ -192,7 +147,8 @@ public class ConfigurationMenu(PathSettings? existingSettings = null)
         {
             if (count >= 1 && count <= 10)
             {
-                _settings.PtfFolderCount = count;
+                _settings.PtfDirCount = count;
+
                 AnsiConsole.MarkupLine($"[green]Set to {count}[/]");
             }
             else
@@ -206,39 +162,54 @@ public class ConfigurationMenu(PathSettings? existingSettings = null)
     private bool ValidatePaths()
     {
         AnsiConsole.WriteLine();
-        var errors = ConfigurationManager.ValidatePaths(_settings);
+        var result = ConfigurationManager.ValidatePaths(_settings);
 
-        if (errors.Count == 0)
-        {
-            AnsiConsole.MarkupLine("[green]All paths valid[/]");
-            AnsiConsole.WriteLine();
-
-            foreach (var folder in _settings.GetAllFolders())
+        result.Switch(
+            success =>
             {
-                string status = Directory.Exists(folder) ? "[green]exists[/]" : "[yellow]create[/]";
-                AnsiConsole.MarkupLine($"  {status}  [dim]{Truncate(folder, 50)}[/]");
-            }
-        }
-        else
-        {
-            AnsiConsole.MarkupLine($"[red]{errors.Count} issue(s)[/]");
-            AnsiConsole.WriteLine();
+                AnsiConsole.MarkupLine("[green]All paths valid[/]");
+                AnsiConsole.WriteLine();
 
-            foreach (var error in errors)
+                foreach (var folder in _settings.GetAllPaths())
+                {
+                    string status = "[green]exists[/]";
+                    AnsiConsole.MarkupLine($"  {status}  [dim]{Truncate(folder, 50)}[/]");
+                }
+            },
+            errors =>
             {
-                AnsiConsole.MarkupLine($"  [red]{error}[/]");
+                foreach (var error in errors)
+                {
+                    AnsiConsole.MarkupLine($"  [red]{error}[/]");
+                }
+
+                AnsiConsole.WriteLine();
+
+                bool isOnlyMissingDirs = errors.All(e => e.Code == "PathSchema.DirectoryNotFound");
+
+                if (isOnlyMissingDirs)
+                {
+                    if (AnsiConsole.Confirm("[dim]Create missing directories?[/]", false))
+                    {
+                        result = ConfigurationManager.CreateDirectories(_settings);
+
+                        if (result.IsError)
+                            foreach (var error in result.Errors)
+                                AnsiConsole.MarkupLine($"[red]{error}");
+                    }
+                }
             }
-        }
+        );
 
         WaitForKey();
         return false;
     }
 
-    private bool LoadDefaults()
+    private bool LoadTest()
     {
-        if (AnsiConsole.Confirm("[dim]Load default paths?[/]", false))
+        if (AnsiConsole.Confirm("[dim]Load test paths?[/]", false))
         {
-            _settings = PathSettings.GetDefaults();
+            _settings = PathSchemaExtensions.WithPaths(new PathSchema(), PathValues.Test());
             AnsiConsole.MarkupLine("[green]Loaded[/]");
             WaitForKey();
         }
@@ -249,7 +220,7 @@ public class ConfigurationMenu(PathSettings? existingSettings = null)
     {
         if (AnsiConsole.Confirm("[dim]Load production paths?[/]", false))
         {
-            _settings = PathSettings.GetProductionDefaults();
+            _settings = PathSchemaExtensions.WithPaths(new PathSchema(), PathValues.Production());
             AnsiConsole.MarkupLine("[green]Loaded[/]");
             WaitForKey();
         }
@@ -258,14 +229,17 @@ public class ConfigurationMenu(PathSettings? existingSettings = null)
 
     private bool Save()
     {
-        if (ConfigurationManager.Save(_settings))
-        {
-            AnsiConsole.MarkupLine("[green]Saved[/]");
-        }
-        else
-        {
-            AnsiConsole.MarkupLine("[red]Save failed[/]");
-        }
+        var result = ConfigurationManager.Save(_settings);
+
+        result.Switch(
+            success => AnsiConsole.MarkupLine("[green]Saved[/]"),
+            errors =>
+            {
+                foreach (var error in result.Errors)
+                    AnsiConsole.MarkupLine($"[red]{error.Description}[/]");
+            }
+        );
+
         WaitForKey();
         return true;
     }

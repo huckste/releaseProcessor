@@ -1,6 +1,9 @@
 namespace ReleaseProcessor.UI;
 
+using ErrorOr;
 using ReleaseProcessor.Configuration;
+using ReleaseProcessor.Models;
+using ReleaseProcessor.Services;
 using Spectre.Console;
 
 /// <summary>
@@ -43,22 +46,19 @@ public class LaunchMenu
     private static void DisplayConfigStatus()
     {
         string status;
-        bool configExists = ConfigurationManager.ConfigExists();
+        ErrorOr<Success> configExists = ConfigurationManager.ConfigExists();
 
-        if (configExists)
+        if (!configExists.IsError)
         {
-            var settings = ConfigurationManager.Load();
-            if (settings != null)
+            ErrorOr<PathSchema?> settings = ConfigurationManager.Load();
+
+            if (!settings.IsError && settings.Value != null)
             {
-                var errors = ConfigurationManager.ValidatePaths(settings);
-                if (errors.Count == 0)
-                {
-                    status = "[green]Ready[/]";
-                }
-                else
-                {
-                    status = $"[yellow]{errors.Count} issue(s)[/]";
-                }
+                ErrorOr<Success> errors = ConfigurationManager.ValidatePaths(settings.Value);
+
+                status = !errors.IsError
+                    ? $"[green][[{SinglePickScanner.GetUnprocessedFiles().Count}]] Files Ready[/]"
+                    : $"[yellow]{errors.Errors.Count} issue(s)[/]";
             }
             else
             {
@@ -109,9 +109,6 @@ public class LaunchMenu
         return AnsiConsole.Confirm(message, defaultValue: false);
     }
 
-    /// <summary>
-    /// Waits for user to press any key
-    /// </summary>
     public static void WaitForKey(string message = "Press any key to continue...")
     {
         AnsiConsole.WriteLine();

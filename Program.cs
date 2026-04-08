@@ -1,7 +1,11 @@
 using ReleaseProcessor;
 
-Console.OutputEncoding = System.Text.Encoding.UTF8;
-
-var app = new ReleaseApp();
-
-await ReleaseApp.Run();
+try
+{
+    Console.OutputEncoding = System.Text.Encoding.UTF8;
+    await ReleaseApp.Run();
+}
+catch (Exception ex)
+{
+    throw new Exception($"Unexpected error occured: {ex.Message}");
+}

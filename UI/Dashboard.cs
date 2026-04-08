@@ -34,11 +34,10 @@ public class Dashboard()
 
     private Layout CreateLayout()
     {
-        // Root layout - Left (PTF folders) and Right (Queue + Stats) side by side
         var layout = new Layout("Root").SplitColumns(new Layout("Left"), new Layout("Right"));
 
         // Left Panel - PTF folder panels with equal ratio (auto-fit to available height)
-        var ptfFolders = ConfigurationManager.Current?.GetPtfFolders() ?? [];
+        var ptfFolders = ConfigurationManager.Current?.GetPtfDirs() ?? [];
 
         var ptfLayouts = ptfFolders
             .Select((folder, i) => new Layout($"PTF{i + 1}").Ratio(1))
@@ -193,8 +192,8 @@ public class Dashboard()
 
     private static string FormatEta(string? eta)
     {
-        if (string.IsNullOrEmpty(eta) || eta == "Calculating...")
-            return "Calculating";
+        if (string.IsNullOrEmpty(eta))
+            return "Calculating...";
 
         // Parse formats like "1h 30m", "5m 30s", "30s"
         int hours = 0,

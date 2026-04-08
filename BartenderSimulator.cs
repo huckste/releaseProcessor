@@ -40,7 +40,7 @@ public class BartenderSimulator(string[] ptfFolders)
 
                 var txtFiles = Directory
                     .GetFiles(folderPath, "*.txt")
-                    .OrderBy(f => File.GetCreationTime(f))
+                    .OrderBy(File.GetCreationTime)
                     .ToArray();
 
                 if (txtFiles.Length > 0)
@@ -99,9 +99,12 @@ public class BartenderSimulator(string[] ptfFolders)
                 await Task.Delay(1000, cancellationToken);
 
                 var settings = ConfigurationManager.Current;
-                if (settings != null && Directory.Exists(settings.CompletedFolder))
+                if (settings != null && Directory.Exists(settings.PrnCompletedDir.Path))
                 {
-                    var finalPath = Path.Combine(settings.CompletedFolder, $"{baseFileName}.PRN");
+                    var finalPath = Path.Combine(
+                        settings.PrnCompletedDir.Path,
+                        $"{baseFileName}.PRN"
+                    );
                     File.Move(completedPath, finalPath);
                 }
             }

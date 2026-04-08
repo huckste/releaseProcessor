@@ -1,19 +1,14 @@
 namespace ReleaseProcessor;
 
+using System.Collections.Concurrent;
+using ErrorOr;
 using ReleaseProcessor.Configuration;
+using ReleaseProcessor.Models;
 using ReleaseProcessor.Services;
 using ReleaseProcessor.UI;
 
-/// <summary>
-/// Main application class that orchestrates the release processing workflow.
-/// </summary>
 public class ReleaseApp
 {
-    public ReleaseApp()
-    {
-        ConfigurationManager.LoadOrCreateDefault();
-    }
-
     public static async Task Run()
     {
         while (true)
@@ -39,6 +34,7 @@ public class ReleaseApp
 
     private static async Task RunProcessing()
     {
+        PathSchema settings = ConfigurationManager.Current!;
         var candidates = SinglePickScanner.GetUnprocessedFiles();
 
         if (candidates.Count == 0)
@@ -48,41 +44,21 @@ public class ReleaseApp
             return;
         }
 
-        // show launch menu even if only one file
         var selected = LaunchMenu.ShowFileSelection(candidates);
-
         var copiedFile = SinglePickScanner.CopyFile(selected);
-        var settings = ConfigurationManager.Current!;
+        ConcurrentDictionary<string, PrintJob> jobs = [];
+        var ptfFolders = settings.GetPtfDirs();
 
-        // Validate configuration before running
-        var errors = ConfigurationManager.ValidatePaths(settings);
-        if (errors.Count > 0)
-        {
-            Spectre.Console.AnsiConsole.MarkupLine(
-                "[red]Cannot run - configuration has errors:[/]"
-            );
-            foreach (var error in errors)
-            {
-                Spectre.Console.AnsiConsole.MarkupLine($"  [red]- {error}[/]");
-            }
-            LaunchMenu.WaitForKey();
-            return;
-        }
+        CleanupLeftoverFiles(ptfFolders, settings.PrnCompletedDir.Path);
 
-        ConfigurationManager.EnsureFoldersExist(settings);
-
-        // Clean up any leftover files from previous failed runs
-        var ptfFolders = settings.GetPtfFolders();
-        CleanupLeftoverFiles(ptfFolders, settings.CompletedFolder);
-
-        // Parse SinglePick file
-        var jobs = await SinglePickParser.ParseAsync(copiedFile);
+        if (!copiedFile.IsError)
+            jobs = await SinglePickParser.ParseAsync(copiedFile.Value);
 
         // Assign jobs to PTF folders
         PtfDistributor.AssignJobsToFolders(jobs, ptfFolders);
 
         // Setup watchers and tracker
-        var folderWatcher = new FolderWatcher(ptfFolders, settings.CompletedFolder);
+        var folderWatcher = new FolderWatcher(ptfFolders, settings.PrnCompletedDir.Path);
         var dashboard = new Dashboard();
         var jobTracker = new PrintJobTracker(jobs);
 
@@ -110,6 +86,8 @@ public class ReleaseApp
         };
 
         var startTime = DateTime.Now;
+        var bartenderSim = new BartenderSimulator([.. settings.GetPtfDirs()]);
+        _ = bartenderSim.Start(cts.Token);
 
         // Write job files and start dashboard
         try
@@ -134,7 +112,7 @@ public class ReleaseApp
             else
             {
                 // Early quit - just delete files, no archive
-                CleanupLeftoverFiles(ptfFolders, settings.CompletedFolder);
+                CleanupLeftoverFiles(ptfFolders, settings.PrnCompletedDir.Path);
             }
 
             var notifyTask = TeamsNotification.PostAsync(
@@ -142,7 +120,7 @@ public class ReleaseApp
                 jobTracker.CompletedCount,
                 jobTracker.FailedCount,
                 totalTime,
-                Path.GetFileName(copiedFile)
+                Path.GetFileName(copiedFile.Value)
             );
 
             await EndScreen.Show(
@@ -162,31 +140,31 @@ public class ReleaseApp
         ArchiveService.ClearFolder(completedFolder);
     }
 
-    private static void ArchiveAndDeliver(PathSettings settings, List<string> ptfFolders)
+    private static void ArchiveAndDeliver(PathSchema settings, List<string> ptfFolders)
     {
         var timestamp = DateTime.Now.ToString("yyyyMMddHHmmss");
 
         // Archive PTF files (original .txt files now as .Processed)
-        var ptfArchivePath = Path.Combine(settings.PtfArchiveFolder, $"completed_{timestamp}.zip");
+        var ptfArchivePath = Path.Combine(settings.PtfArchive.Path, $"completed_{timestamp}.zip");
         var ptfFilesToDelete = ArchiveService.CreateArchive(ptfArchivePath, ptfFolders);
 
         // Archive PRN files
         var prnArchivePath = Path.Combine(
-            settings.PrnArchiveFolder,
+            settings.PrnArchive.Path,
             $"bartender_prnproc - Copy_PTFPRNFiles_{timestamp}.zip"
         );
         var prnFilesToDelete = ArchiveService.CreateArchive(
             prnArchivePath,
-            settings.CompletedFolder
+            settings.PrnCompletedDir.Path
         );
 
         // Move PRN files to delivery folder
-        ArchiveService.MoveFiles(settings.CompletedFolder, settings.DeliveryFolder);
+        ArchiveService.MoveFiles(settings.PrnCompletedDir.Path, settings.PrnDeliveryDir.Path);
 
-        ArchiveService.MoveFiles(settings.SinglePickFolder, settings.SinglePickArchiveFolder);
+        ArchiveService.MoveFiles(settings.SinglePickDir.Path, settings.SinglePickArchive.Path);
 
         // Delete archived files
-        ArchiveService.DeleteFiles(ptfFilesToDelete);
-        ArchiveService.DeleteFiles(prnFilesToDelete);
+        ArchiveService.DeleteFiles(ptfFilesToDelete.Value);
+        ArchiveService.DeleteFiles(prnFilesToDelete.Value);
     }
 }

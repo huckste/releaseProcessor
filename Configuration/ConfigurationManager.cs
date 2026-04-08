@@ -2,16 +2,14 @@ namespace ReleaseProcessor.Configuration;
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using ErrorOr;
+using ReleaseProcessor.Models;
 
-/// <summary>
-/// Manages loading and saving of configuration from/to JSON file
-/// </summary>
 public static class ConfigurationManager
 {
-    private static readonly string ConfigFileName = "config.json";
-    private static readonly string ConfigFilePath = Path.Combine(
+    private static readonly string _configFilePath = Path.Combine(
         AppDomain.CurrentDomain.BaseDirectory,
-        ConfigFileName
+        "config.json"
     );
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -21,138 +19,122 @@ public static class ConfigurationManager
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    /// <summary>
-    /// Current loaded configuration
-    /// </summary>
-    public static PathSettings? Current { get; private set; }
+    public static string GetConfigPath() => _configFilePath;
 
-    /// <summary>
-    /// Loads configuration from config.json, or returns null if not found
-    /// </summary>
-    public static PathSettings? Load()
+    public static PathSchema? Current { get; private set; }
+
+    public static ErrorOr<Success> Create()
+    {
+        var newPathSchema = PathSchemaExtensions.WithPaths(
+            new PathSchema(),
+            PathValues.Production()
+        );
+
+        return Save(newPathSchema).Then(r => Result.Success);
+    }
+
+    public static ErrorOr<PathSchema?> Load()
     {
         try
         {
-            if (!File.Exists(ConfigFilePath))
-            {
-                return null;
-            }
-
-            string json = File.ReadAllText(ConfigFilePath);
-            Current = JsonSerializer.Deserialize<PathSettings>(json, JsonOptions);
+            string json = File.ReadAllText(_configFilePath);
+            Current = JsonSerializer.Deserialize<PathSchema>(json, JsonOptions);
             return Current;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error loading configuration: {ex.Message}");
-            return null;
+            return Error.Failure(
+                "PathSchema.FailedToLoad",
+                $"Failed to load file path schema: {ex.Message}"
+            );
         }
     }
 
-    /// <summary>
-    /// Saves configuration to config.json
-    /// </summary>
-    public static bool Save(PathSettings settings)
+    public static ErrorOr<Updated> Save(PathSchema settings)
     {
         try
         {
             string json = JsonSerializer.Serialize(settings, JsonOptions);
-            File.WriteAllText(ConfigFilePath, json);
+            File.WriteAllText(_configFilePath, json);
             Current = settings;
-            return true;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error saving configuration: {ex.Message}");
-            return false;
+            return Error.Failure(
+                "PathSchema.SaveFailed",
+                $"Failed to save file path config: {ex.Message}"
+            );
         }
+
+        return Result.Updated;
     }
 
-    /// <summary>
-    /// Checks if configuration file exists
-    /// </summary>
-    public static bool ConfigExists() => File.Exists(ConfigFilePath);
+    public static ErrorOr<Success> ConfigExists() =>
+        File.Exists(_configFilePath)
+            ? Result.Success
+            : Error.NotFound(
+                "PathSchema.ConfigNotFound",
+                $"Config file not found at: {_configFilePath}"
+            );
 
-    /// <summary>
-    /// Gets the path to the config file
-    /// </summary>
-    public static string GetConfigPath() => ConfigFilePath;
-
-    /// <summary>
-    /// Loads existing config or creates default if none exists
-    /// </summary>
-    public static PathSettings LoadOrCreateDefault()
+    public static ErrorOr<Success> CreateDirectories(PathSchema settings)
     {
-        var settings = Load();
-        if (settings == null)
+        List<string> allPaths = settings.GetAllPaths();
+        List<Error> errors = [];
+
+        foreach (var path in allPaths)
         {
-            settings = PathSettings.GetDefaults();
-            Save(settings);
+            try
+            {
+                Directory.CreateDirectory(path);
+            }
+            catch (Exception ex)
+            {
+                errors.Add(
+                    Error.Failure(
+                        "PathSchema.DirectoryCreateFailed",
+                        $"Failed to create directory '{path}': {ex.Message}"
+                    )
+                );
+            }
         }
-        return settings;
+
+        if (errors.Count > 0)
+            return errors;
+
+        return Result.Success;
     }
 
-    /// <summary>
-    /// Validates that all configured paths exist or can be created
-    /// </summary>
-    public static List<string> ValidatePaths(PathSettings settings)
+    public static ErrorOr<Success> ValidatePaths(PathSchema settings)
     {
-        var errors = new List<string>();
+        List<Error> errors = [];
+        List<string> allPaths = settings.GetAllPaths();
 
-        // Check SinglePickFilePath exists
-        if (string.IsNullOrWhiteSpace(settings.SinglePickFolder))
-        {
-            errors.Add("SinglePick folder is not configured");
-        }
-        else if (Directory.GetFiles(settings.SinglePickFolder, "*.SNGL").Length == 0)
-        {
-            errors.Add($"No SinglePick files found: {settings.SinglePickFolder}");
-        }
-
-        // Check directories can be accessed/created
-        var foldersToCheck = new Dictionary<string, string>
-        {
-            { "PTF Base Path", settings.PtfBasePath },
-            { "Build Folder", settings.BuildFolder },
-            { "Completed Folder", settings.CompletedFolder },
-            { "Delivery Folder", settings.DeliveryFolder },
-            { "PTF Archive Folder", settings.PtfArchiveFolder },
-            { "PRN Archive Folder", settings.PrnArchiveFolder },
-            { "Available Files", settings.AvailableFilesFolder },
-            { "Single Pick Archive", settings.SinglePickArchiveFolder },
-            { "Failed Folder", settings.FailedFolder },
-            { "Logs Folder", settings.LogsFolder },
-        };
-
-        foreach (var (name, path) in foldersToCheck)
+        foreach (var path in allPaths)
         {
             if (string.IsNullOrWhiteSpace(path))
             {
-                errors.Add($"{name} is not configured");
+                errors.Add(
+                    Error.Validation("PathSchema.PathNotConfigured", "Path is not configured")
+                );
+
+                continue;
             }
-        }
 
-        return errors;
-    }
-
-    /// <summary>
-    /// Creates all configured directories if they don't exist
-    /// </summary>
-    public static void EnsureFoldersExist(PathSettings settings)
-    {
-        foreach (var folder in settings.GetAllFolders())
-        {
-            if (!string.IsNullOrWhiteSpace(folder) && !Directory.Exists(folder))
+            if (!Directory.Exists(path))
             {
-                try
-                {
-                    Directory.CreateDirectory(folder);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Warning: Could not create folder {folder}: {ex.Message}");
-                }
+                errors.Add(
+                    Error.Failure(
+                        "PathSchema.DirectoryNotFound",
+                        $"Failed to locate directory '{path}'"
+                    )
+                );
             }
         }
+
+        if (errors.Count > 0)
+            return errors;
+
+        return Result.Success;
     }
 }

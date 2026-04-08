@@ -1,6 +1,7 @@
 namespace ReleaseProcessor.Services;
 
 using System.Collections.Concurrent;
+using ErrorOr;
 using ReleaseProcessor.Events;
 using ReleaseProcessor.Models;
 
@@ -15,12 +16,14 @@ public class PrintJobTracker(ConcurrentDictionary<string, PrintJob> jobs)
     private readonly HashSet<PrintJob> _failedJobs = [];
     private readonly int _totalJobCount = jobs.Count;
     private readonly Lock _completedJobsLock = new();
-    private double _lastJobSeconds = 0;
-    private double _avgSecondsPerJob = 0;
-    private double _lastDisplayedEtaSeconds = double.MaxValue;
+
+    private readonly Lock _FailedJobsLock = new();
+    private DateTime _startTime;
+    private double _displayedEtaSeconds = -1;
 
     public event EventHandler<DashboardUpdateEventArgs>? DashboardUpdate;
     public event EventHandler? AllJobsCompleted;
+    public event EventHandler<ErrorEventArgs>? ErrorOccurred;
 
     // Stats for end screen
     public int TotalJobs => _totalJobCount;
@@ -28,14 +31,12 @@ public class PrintJobTracker(ConcurrentDictionary<string, PrintJob> jobs)
     public int FailedCount => _failedJobs.Count;
     public bool HasPendingJobs => !_activeJobs.IsEmpty;
 
-    /// <summary>
-    /// Pushes initial state to dashboard
-    /// </summary>
-    public void Initialize() => RaiseDashboardUpdate();
+    public void Initialize()
+    {
+        _startTime = DateTime.Now;
+        RaiseDashboardUpdate();
+    }
 
-    /// <summary>
-    /// Handles job status changes from PTF folder (Pending → Processing → Failed)
-    /// </summary>
     public void OnJobStatusChanged(object? sender, JobStatusChangedEventArgs e)
     {
         if (!_activeJobs.TryGetValue(e.CartonId, out var job))
@@ -76,10 +77,18 @@ public class PrintJobTracker(ConcurrentDictionary<string, PrintJob> jobs)
         job.Status = PrintJobStatus.Completed;
         job.CompletedAt = e.Timestamp;
 
-        // If ProcessingStartedAt wasn't set, use fallback so estimation doesn't break
-        job.ProcessingStartedAt ??= job.CompletedAt;
-        _lastJobSeconds = (job.CompletedAt!.Value - job.ProcessingStartedAt!.Value).TotalSeconds;
-        _avgSecondsPerJob = (0.3 * _lastJobSeconds) + (0.7 * _avgSecondsPerJob);
+        var completed = _completedJobs.Count + _failedJobs.Count + 1;
+        var minForEta = Math.Max(1, (int)(_totalJobCount * 0.10));
+
+        if (completed >= minForEta)
+        {
+            var elapsed = (DateTime.Now - _startTime).TotalSeconds;
+            var remaining = _totalJobCount - completed;
+            var newEta = elapsed / completed * remaining;
+
+            if (_displayedEtaSeconds < 0 || newEta < _displayedEtaSeconds)
+                _displayedEtaSeconds = newEta;
+        }
 
         MarkJobCompleted(job);
         RaiseDashboardUpdate();
@@ -94,13 +103,30 @@ public class PrintJobTracker(ConcurrentDictionary<string, PrintJob> jobs)
 
             if (job.FailedAttempts >= 3)
             {
-                _failedJobs.Add(job);
+                lock (_FailedJobsLock)
+                    _failedJobs.Add(job);
+
                 _activeJobs.TryRemove(job.CartonId, out _);
             }
             else
             {
                 // Retry: rename back to .txt
-                File.Move(job.PtfFilePath, job.OriginalFilePath);
+                try
+                {
+                    File.Move(job.PtfFilePath, job.OriginalFilePath);
+                }
+                catch (Exception ex)
+                {
+                    ErrorOccurred?.Invoke(
+                        this,
+                        new ErrorEventArgs([
+                            Error.Failure(
+                                "HandleFailedJob.RetryFailed",
+                                $"Failed to retry job '{job.CartonId}': {ex.Message}"
+                            ),
+                        ])
+                    );
+                }
             }
 
             RaiseDashboardUpdate();
@@ -144,24 +170,13 @@ public class PrintJobTracker(ConcurrentDictionary<string, PrintJob> jobs)
 
     private string CalculateEstimatedTimeRemaining()
     {
-        if (_completedJobs.Count < 5)
-            return "Calculating...";
-
         if (_activeJobs.IsEmpty)
-            return "0:00:00";
+            return "00:00:00";
 
-        var timeSpan = TimeSpan.FromSeconds(
-            _avgSecondsPerJob
-                * _activeJobs.Count
-                / (_activeJobs.Count < 5 ? _activeJobs.Count : 5.0)
-        );
+        if (_displayedEtaSeconds < 0)
+            return "";
 
-        var etaSeconds = timeSpan.TotalSeconds;
-
-        if (etaSeconds < _lastDisplayedEtaSeconds)
-            _lastDisplayedEtaSeconds = etaSeconds;
-
-        timeSpan = TimeSpan.FromSeconds(_lastDisplayedEtaSeconds);
+        var timeSpan = TimeSpan.FromSeconds(_displayedEtaSeconds);
 
         if (timeSpan.TotalHours >= 1)
             return $"{(int)timeSpan.TotalHours}h {timeSpan.Minutes}m";

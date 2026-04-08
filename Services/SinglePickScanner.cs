@@ -1,30 +1,32 @@
 namespace ReleaseProcessor.Services;
 
 using System.Data;
+using ErrorOr;
 using ReleaseProcessor.Configuration;
+using ReleaseProcessor.Models;
 
 public class SinglePickScanner
 {
-    private static readonly PathSettings _settings = ConfigurationManager.Current!;
+    private static readonly PathSchema _settings = ConfigurationManager.Current!;
 
     public static List<string> GetUnprocessedFiles()
     {
-        if (Directory.EnumerateFiles(_settings.SinglePickArchiveFolder, "*.SNGL").Any())
+        if (Directory.EnumerateFiles(_settings.SinglePickDir.Path, "*.SNGL").Any())
         {
-            return [.. Directory.GetFiles(_settings.SinglePickFolder, "*.SNGL")];
+            return [.. Directory.GetFiles(_settings.SinglePickDir.Path, "*.SNGL")];
         }
 
         var today = DateTime.Today;
 
         var archiveFiles = Directory
-            .GetFiles(_settings.SinglePickArchiveFolder)
+            .GetFiles(_settings.SinglePickArchive.Path)
             .Select(f => Path.GetFileName(f))
             .ToHashSet();
 
         return
         [
             .. Directory
-                .GetFiles(_settings.AvailableFilesFolder, "*.SNGL")
+                .GetFiles(_settings.LabelsDir.Path, "*.SNGL")
                 .Where(f =>
                 {
                     var info = new FileInfo(f);
@@ -36,13 +38,28 @@ public class SinglePickScanner
         ];
     }
 
-    public static string CopyFile(string sourceFile)
+    public static ErrorOr<string> CopyFile(string sourceFile)
     {
         var fileName = Path.GetFileName(sourceFile);
-        var destination = Path.Combine(_settings.SinglePickFolder, fileName);
+        var destination = Path.Combine(_settings.SinglePickDir.Path, fileName);
 
-        if (!File.Exists(destination))
+        if (File.Exists(destination))
+            return destination;
+
+        if (!File.Exists(sourceFile))
+            return Error.NotFound("CopyFile.FileNotFound", $"Failed to locate file '{sourceFile}'");
+
+        try
+        {
             File.Copy(sourceFile, destination);
+        }
+        catch
+        {
+            return Error.Failure(
+                "CopyFile.FailedToCopyFile",
+                $"Failed to copy file '{sourceFile}' to '{destination}'"
+            );
+        }
 
         return destination;
     }

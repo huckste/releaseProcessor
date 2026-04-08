@@ -1,104 +1,192 @@
 namespace ReleaseProcessor.Services;
 
 using System.IO.Compression;
+using ErrorOr;
 
-/// <summary>
-/// Handles archiving completed files and cleanup operations.
-/// </summary>
 public static class ArchiveService
 {
-    /// <summary>
-    /// Creates a zip archive of all files in the specified folders.
-    /// Returns list of archived file paths for deletion.
-    /// </summary>
-    public static List<string> CreateArchive(string archivePath, List<string> sourceFolders)
+    public static ErrorOr<List<string>> CreateArchive(
+        string archivePath,
+        List<string> sourceFolders
+    )
     {
         var archivedFiles = new List<string>();
+        List<Error> errors = [];
 
-        using (var zip = ZipFile.Open(archivePath, ZipArchiveMode.Create))
+        try
         {
+            using var zip = ZipFile.Open(archivePath, ZipArchiveMode.Create);
+
             foreach (var folder in sourceFolders)
             {
                 if (!Directory.Exists(folder))
+                {
+                    errors.Add(
+                        Error.NotFound(
+                            "CreateArchive.FailedToFindDirectory",
+                            $"Failed to find directory: {folder}"
+                        )
+                    );
+
                     continue;
+                }
 
                 foreach (var file in Directory.GetFiles(folder))
                 {
-                    zip.CreateEntryFromFile(file, Path.GetFileName(file));
-                    archivedFiles.Add(file);
+                    try
+                    {
+                        zip.CreateEntryFromFile(file, Path.GetFileName(file));
+                        archivedFiles.Add(file);
+                    }
+                    catch
+                    {
+                        errors.Add(
+                            Error.Failure(
+                                "CreateArchive.FailedToCreateEntry",
+                                $"Failed to create entry from file: {file}"
+                            )
+                        );
+                    }
                 }
             }
         }
+        catch (Exception ex)
+        {
+            return Error.Failure(
+                "CreateArchive.FailedToCreateZip",
+                $"Failed to create zip file '{archivePath}': {ex.Message}"
+            );
+        }
+
+        if (errors.Count > 0)
+            return errors;
 
         return archivedFiles;
     }
 
-    /// <summary>
-    /// Creates a zip archive of all files in a single folder.
-    /// Returns list of archived file paths for deletion.
-    /// </summary>
-    public static List<string> CreateArchive(string archivePath, string sourceFolder)
+    public static ErrorOr<List<string>> CreateArchive(string archivePath, string sourceFolder)
     {
         return CreateArchive(archivePath, [sourceFolder]);
     }
 
-    /// <summary>
-    /// Moves all files from source to destination folder.
-    /// </summary>
-    public static void MoveFiles(string sourceFolder, string destinationFolder)
+    public static ErrorOr<Success> MoveFiles(
+        string sourceFolder,
+        string destinationFolder,
+        bool reRun = false
+    )
     {
+        List<Error> errors = [];
+
         if (!Directory.Exists(sourceFolder))
-            return;
+            return Error.NotFound(
+                "MoveFiles.DirectoryNotFound",
+                $"Failed to find directory: {sourceFolder}"
+            );
+
+        if (!Directory.Exists(destinationFolder))
+            return Error.NotFound(
+                "MoveFiles.DirectoryNotFound",
+                $"Failed to find directory: {destinationFolder}"
+            );
 
         foreach (var file in Directory.GetFiles(sourceFolder))
         {
-            var fileName = Path.GetFileName(file);
-            var destinationPath = Path.Combine(destinationFolder, fileName);
-            File.Move(file, destinationPath, overwrite: true);
+            try
+            {
+                File.Move(file, GetDestinationPath(file, destinationFolder), overwrite: true);
+            }
+            catch
+            {
+                errors.Add(
+                    Error.Failure(
+                        "MoveFiles.FailedToMoveFile",
+                        $"Failed to move file '{file}' to '{Path.Combine(destinationFolder, Path.GetFileName(file))}'"
+                    )
+                );
+            }
         }
+
+        if (errors.Count > 0)
+        {
+            if (!reRun)
+                return MoveFiles(sourceFolder, destinationFolder, true);
+
+            return errors;
+        }
+
+        return Result.Success;
     }
 
-    /// <summary>
-    /// Deletes the specified files.
-    /// </summary>
-    public static void DeleteFiles(List<string> filePaths)
+    private static string GetDestinationPath(string file, string destinationFolder) =>
+        Path.Combine(destinationFolder, Path.GetFileName(file));
+
+    public static ErrorOr<Deleted> DeleteFiles(List<string> filePaths, bool reRun = false)
     {
+        List<string> failedFiles = [];
+        List<Error> errors = [];
+
         foreach (var file in filePaths)
         {
             try
             {
+                if (!File.Exists(file))
+                    continue;
+
                 File.Delete(file);
             }
-            catch { }
+            catch
+            {
+                errors.Add(
+                    Error.Failure(
+                        "DeleteFiles.FailedToDeleteFile",
+                        $"Failed to delete file '{file}'"
+                    )
+                );
+
+                failedFiles.Add(file);
+            }
         }
+
+        if (errors.Count > 0)
+        {
+            if (!reRun)
+                return DeleteFiles(failedFiles, true);
+
+            return errors;
+        }
+
+        return Result.Deleted;
     }
 
-    /// <summary>
-    /// Deletes all files in the specified folder.
-    /// </summary>
-    public static void ClearFolder(string folderPath)
+    public static ErrorOr<Deleted> ClearFolder(string folderPath)
     {
         if (!Directory.Exists(folderPath))
-            return;
+            return Error.NotFound(
+                "ClearFolder.DirectoryNotFound",
+                $"Failed to locate directory '{folderPath}'"
+            );
 
-        foreach (var file in Directory.GetFiles(folderPath))
-        {
-            try
-            {
-                File.Delete(file);
-            }
-            catch { }
-        }
+        List<string> filePaths = [];
+        filePaths.AddRange(Directory.GetFiles(folderPath));
+
+        return DeleteFiles(filePaths);
     }
 
-    /// <summary>
-    /// Clears multiple folders.
-    /// </summary>
-    public static void ClearFolders(List<string> folderPaths)
+    public static ErrorOr<Deleted> ClearFolders(List<string> folderPaths)
     {
+        List<Error> errors = [];
+
         foreach (var folder in folderPaths)
         {
-            ClearFolder(folder);
+            var result = ClearFolder(folder);
+
+            if (result.IsError)
+                errors.AddRange(result.Errors);
         }
+
+        if (errors.Count > 0)
+            return errors;
+
+        return Result.Deleted;
     }
 }

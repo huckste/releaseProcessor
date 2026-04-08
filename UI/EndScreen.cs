@@ -17,6 +17,7 @@ public class EndScreen
         AnsiConsole.Clear();
 
         var successRate = totalJobs > 0 ? (completed * 100 / totalJobs) : 0;
+
         var successColor =
             successRate >= 90 ? "green"
             : successRate >= 70 ? "yellow"
