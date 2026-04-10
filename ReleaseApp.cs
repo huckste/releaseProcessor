@@ -90,8 +90,8 @@ public class ReleaseApp
         };
 
         var startTime = DateTime.Now;
-        var bartenderSim = new BartenderSimulator([.. settings.GetPtfDirs()]);
-        _ = bartenderSim.Start(cts.Token);
+        // var bartenderSim = new BartenderSimulator([.. settings.GetPtfDirs()]);
+        // _ = bartenderSim.Start(cts.Token);
 
         // Write job files and start dashboard
         try
