@@ -1,41 +1,79 @@
+using System.Text.Json.Serialization;
+
 namespace ReleaseProcessor.Models;
 
 public class PathSchema
 {
     public PathDesc SinglePickDir { get; set; } =
-        new() { Name = "Single pick directory", Desc = "Directory where single pick files placed" };
+        new()
+        {
+            Name = "Single pick directory",
+            Desc = "Directory where single pick files placed",
+            ProdRelative = @"C:\Single Pick",
+            TestRelative = "Single Pick",
+        };
 
     public PathDesc LabelsDir { get; set; } =
-        new() { Name = "Labels directory", Desc = "Directory where newly added labels are found" };
+        new()
+        {
+            Name = "Labels directory",
+            Desc = "Directory where newly added labels are found",
+            ProdRelative = @"\\ind-as84\asroot$\labels",
+            TestRelative = "labels",
+        };
 
     public PathDesc PtfBaseDir { get; set; } =
         new()
         {
             Name = "PTF base directory",
             Desc = "Bartender directories where label files are placed",
+            ProdRelative = @"\\ind-as10\BARPRN\PTF",
+            TestRelative = "PTF",
         };
 
     public PathDesc PrnBuildDir { get; set; } =
-        new() { Name = "PRN build directory", Desc = "Build directory for PRN files" };
+        new()
+        {
+            Name = "PRN build directory",
+            Desc = "Build directory for PRN files",
+            ProdRelative = @"\\ind-as10\PrintToFile\Build",
+            TestRelative = "Build",
+        };
 
     public PathDesc PrnCompletedDir { get; set; } =
-        new() { Name = "PRN completed directory", Desc = "Completed directory for PRN files" };
+        new()
+        {
+            Name = "PRN completed directory",
+            Desc = "Completed directory for PRN files",
+            ProdRelative = @"\\ind-as10\PrintToFile\Complete",
+            TestRelative = "Complete",
+        };
 
     public PathDesc PrnDeliveryDir { get; set; } =
         new()
         {
             Name = "PRN delivery directory",
             Desc = "Directory where completed PRN files are placed",
+            ProdRelative = @"\\indfs01\SinglePick",
+            TestRelative = "Delivery",
         };
 
     public PathDesc PtfArchive { get; set; } =
-        new() { Name = "PTF archive directory", Desc = "Directory where label files are archived" };
+        new()
+        {
+            Name = "PTF archive directory",
+            Desc = "Directory where label files are archived",
+            ProdRelative = @"\\ind-as10\PrintToFile\Archive",
+            TestRelative = "PtfArchive",
+        };
 
     public PathDesc PrnArchive { get; set; } =
         new()
         {
             Name = "PRN archive directory",
             Desc = "Directory where completed PRN files are archived",
+            ProdRelative = @"\\ind-as10\Archive",
+            TestRelative = "PrnArchive",
         };
 
     public PathDesc SinglePickArchive { get; set; } =
@@ -43,6 +81,8 @@ public class PathSchema
         {
             Name = "Single pick archive directory",
             Desc = "Directory where single pick files are archived",
+            ProdRelative = @"C:\Single Pick\Archive",
+            TestRelative = "SinglePickArchive",
         };
 
     public PathDesc FailedDir { get; set; } =
@@ -50,10 +90,18 @@ public class PathSchema
         {
             Name = "Failed PRN directory",
             Desc = "Directory where failed PRN files get placed",
+            ProdRelative = @"C:\scripts\Failed",
+            TestRelative = "Failed",
         };
 
     public PathDesc LogDir { get; set; } =
-        new() { Name = "Log directory", Desc = "Directory where log files get placed" };
+        new()
+        {
+            Name = "Log directory",
+            Desc = "Directory where log files get placed",
+            ProdRelative = @"C:\scripts\Logs",
+            TestRelative = "Logs",
+        };
 
     public int PtfDirCount { get; set; } = 5;
 
@@ -83,111 +131,35 @@ public class PathSchema
         return allPaths;
     }
 
-    public List<string> GetPtfDirs()
-    {
-        List<string> ptfDirs = [];
+    public List<string> GetPtfDirs() =>
+        [
+            .. Enumerable
+                .Range(1, PtfDirCount)
+                .Select(i => Path.Combine(PtfBaseDir.Path, $"PTF0{i}")),
+        ];
 
-        for (int i = 1; i <= PtfDirCount; i++)
+    public void ReleaseDefaults(bool isTest)
+    {
+        string testBaseDir = @"/home/huckste/Scripts";
+
+        foreach (var desc in ToList())
         {
-            ptfDirs.Add(Path.Combine(PtfBaseDir.Path, $"PTF0{i}"));
+            var relative = isTest ? desc.TestRelative : desc.ProdRelative;
+            desc.Path = !isTest ? relative : Path.Combine(testBaseDir, relative);
         }
-
-        return ptfDirs;
-    }
-}
-
-public static class PathValues
-{
-    public static Dictionary<string, string> Production()
-    {
-        var baseDir = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var scriptsDir = Path.Combine(baseDir, "Scripts");
-
-        return new()
-        {
-            [nameof(PathSchema.SinglePickDir)] = Path.Combine(scriptsDir, "Single Pick"),
-            [nameof(PathSchema.LabelsDir)] = @"ind-as84\asroot$\labels",
-            [nameof(PathSchema.PtfBaseDir)] = Path.Combine(scriptsDir, "ind-as10", "BARPRN", "PTF"),
-            [nameof(PathSchema.PrnBuildDir)] = Path.Combine(
-                scriptsDir,
-                "ind-as10",
-                "PrintToFile",
-                "Build"
-            ),
-            [nameof(PathSchema.PrnCompletedDir)] = Path.Combine(
-                scriptsDir,
-                "ind-as10",
-                "PrintToFile",
-                "Completed"
-            ),
-            [nameof(PathSchema.PrnDeliveryDir)] = Path.Combine(scriptsDir, "indfs01", "SinglePick"),
-            [nameof(PathSchema.PtfArchive)] = Path.Combine(
-                scriptsDir,
-                "ind-as10",
-                "PrintToFile",
-                "Archive"
-            ),
-            [nameof(PathSchema.PrnArchive)] = Path.Combine(scriptsDir, "Archive"),
-            [nameof(PathSchema.SinglePickArchive)] = Path.Combine(
-                scriptsDir,
-                "Single Pick",
-                "Archive"
-            ),
-            [nameof(PathSchema.FailedDir)] = Path.Combine(scriptsDir, "Failed"),
-            [nameof(PathSchema.LogDir)] = Path.Combine(scriptsDir, "Logs"),
-        };
     }
 
-    public static Dictionary<string, string> Test()
+    public static PathSchema Production()
     {
-        var testDir = @"/home/huckste/Scripts";
-
-        return new()
-        {
-            [nameof(PathSchema.SinglePickDir)] = Path.Combine(testDir, "Single Pick"),
-            [nameof(PathSchema.LabelsDir)] = Path.Combine(testDir, "labels"),
-            [nameof(PathSchema.PtfBaseDir)] = Path.Combine(testDir, "PTF"),
-            [nameof(PathSchema.PrnBuildDir)] = Path.Combine(testDir, "Build"),
-            [nameof(PathSchema.PrnCompletedDir)] = Path.Combine(testDir, "Completed"),
-            [nameof(PathSchema.PrnDeliveryDir)] = Path.Combine(testDir, "Delivery"),
-            [nameof(PathSchema.PtfArchive)] = Path.Combine(testDir, "PtfArchive"),
-            [nameof(PathSchema.PrnArchive)] = Path.Combine(testDir, "PrnArchive"),
-            [nameof(PathSchema.SinglePickArchive)] = Path.Combine(testDir, "SinglePickArchive"),
-            [nameof(PathSchema.FailedDir)] = Path.Combine(testDir, "Failed"),
-            [nameof(PathSchema.LogDir)] = Path.Combine(testDir, "Logs"),
-        };
+        var schema = new PathSchema();
+        schema.ReleaseDefaults(isTest: false);
+        return schema;
     }
-}
 
-public static class PathSchemaExtensions
-{
-    public static PathSchema WithPaths(this PathSchema schema, Dictionary<string, string> paths)
+    public static PathSchema Test()
     {
-        var pathDescProps = typeof(PathSchema)
-            .GetProperties()
-            .Where(p => p.PropertyType == typeof(PathDesc))
-            .Select(p => p.Name)
-            .ToHashSet();
-
-        var missingKeys = pathDescProps.Except(paths.Keys).ToList();
-        if (missingKeys.Any())
-        {
-            throw new ArgumentException(
-                $"Missing path values for: {string.Join(", ", missingKeys)}"
-            );
-        }
-
-        foreach (var kvp in paths)
-        {
-            var prop = typeof(PathSchema).GetProperty(kvp.Key);
-
-            if (prop?.PropertyType == typeof(PathDesc))
-            {
-                if (prop.GetValue(schema) is PathDesc pathDesc)
-                    pathDesc.Path = kvp.Value;
-            }
-        }
-
+        var schema = new PathSchema();
+        schema.ReleaseDefaults(isTest: true);
         return schema;
     }
 }
@@ -197,4 +169,10 @@ public class PathDesc
     public required string Name { get; set; }
     public string Path { get; set; } = string.Empty;
     public required string Desc { get; set; }
+
+    [JsonIgnore]
+    public string ProdRelative { get; init; } = string.Empty;
+
+    [JsonIgnore]
+    public string TestRelative { get; init; } = string.Empty;
 }

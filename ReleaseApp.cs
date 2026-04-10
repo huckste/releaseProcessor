@@ -45,6 +45,10 @@ public class ReleaseApp
         }
 
         var selected = LaunchMenu.ShowFileSelection(candidates);
+
+        if (selected == "Back")
+            return;
+
         var copiedFile = SinglePickScanner.CopyFile(selected);
         ConcurrentDictionary<string, PrintJob> jobs = [];
         var ptfFolders = settings.GetPtfDirs();

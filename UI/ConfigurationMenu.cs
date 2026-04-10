@@ -209,7 +209,7 @@ public class ConfigurationMenu(PathSchema? existingSettings = null)
     {
         if (AnsiConsole.Confirm("[dim]Load test paths?[/]", false))
         {
-            _settings = PathSchemaExtensions.WithPaths(new PathSchema(), PathValues.Test());
+            _settings = PathSchema.Test();
             AnsiConsole.MarkupLine("[green]Loaded[/]");
             WaitForKey();
         }
@@ -220,7 +220,7 @@ public class ConfigurationMenu(PathSchema? existingSettings = null)
     {
         if (AnsiConsole.Confirm("[dim]Load production paths?[/]", false))
         {
-            _settings = PathSchemaExtensions.WithPaths(new PathSchema(), PathValues.Production());
+            _settings = PathSchema.Production();
             AnsiConsole.MarkupLine("[green]Loaded[/]");
             WaitForKey();
         }

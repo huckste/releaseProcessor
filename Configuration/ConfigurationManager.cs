@@ -23,15 +23,8 @@ public static class ConfigurationManager
 
     public static PathSchema? Current { get; private set; }
 
-    public static ErrorOr<Success> Create()
-    {
-        var newPathSchema = PathSchemaExtensions.WithPaths(
-            new PathSchema(),
-            PathValues.Production()
-        );
-
-        return Save(newPathSchema).Then(r => Result.Success);
-    }
+    public static ErrorOr<Success> Create() =>
+        Save(PathSchema.Production()).Then(r => Result.Success);
 
     public static ErrorOr<PathSchema?> Load()
     {

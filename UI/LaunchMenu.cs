@@ -56,8 +56,11 @@ public class LaunchMenu
             {
                 ErrorOr<Success> errors = ConfigurationManager.ValidatePaths(settings.Value);
 
+                int availableFilesCount = SinglePickScanner.GetUnprocessedFiles().Count;
+                string filesReadyText = availableFilesCount > 1 ? "files" : "file";
+
                 status = !errors.IsError
-                    ? $"[green][[{SinglePickScanner.GetUnprocessedFiles().Count}]] Files Ready[/]"
+                    ? $"[green][[{availableFilesCount}]] {filesReadyText} Ready[/]"
                     : $"[yellow]{errors.Errors.Count} issue(s)[/]";
             }
             else
@@ -75,14 +78,19 @@ public class LaunchMenu
 
     public static string ShowFileSelection(List<string> files)
     {
-        var selected = AnsiConsole.Prompt(
+        var choice = AnsiConsole.Prompt(
             new SelectionPrompt<string>()
                 .Title("[bold]Select a file to process[/]")
                 .HighlightStyle(new Style(Color.Blue))
                 .AddChoices([.. files.Select(f => Path.GetFileName(f))])
+                .AddChoices("Back")
         );
 
-        return files.First(f => Path.GetFileName(f) == selected);
+        return choice switch
+        {
+            "Back" => "Back",
+            _ => files.First(f => Path.GetFileName(f) == choice),
+        };
     }
 
     private static MenuChoice GetUserChoice()
