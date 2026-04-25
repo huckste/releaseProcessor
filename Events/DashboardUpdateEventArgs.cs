@@ -1,6 +1,6 @@
 namespace ReleaseProcessor.Events;
 
-using ReleaseProcessor.Models;
+using ReleaseProcessor.Processing;
 
 /// <summary>
 /// Contains all data needed to update the dashboard display

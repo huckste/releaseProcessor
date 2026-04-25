@@ -1,4 +1,4 @@
-namespace ReleaseProcessor;
+namespace ReleaseProcessor.Processing;
 
 using ReleaseProcessor.Configuration;
 
@@ -8,9 +8,10 @@ using ReleaseProcessor.Configuration;
 /// - Takes 3-10 seconds to process
 /// - Random chance to fail
 /// </summary>
-public class BartenderSimulator(string[] ptfFolders)
+public class BartenderSimulator(PathSchema pathSchema)
 {
-    private readonly string[] _ptfFolders = ptfFolders;
+    private readonly PathSchema _pathSchema = pathSchema;
+    private readonly string[] _ptfFolders = [.. pathSchema.GetPtfDirs()];
     private readonly Random _random = new();
     private readonly List<Task> _processingTasks = [];
 
@@ -31,13 +32,6 @@ public class BartenderSimulator(string[] ptfFolders)
         {
             try
             {
-                // Check for .txt files to process
-                if (!Directory.Exists(folderPath))
-                {
-                    await Task.Delay(1000, cancellationToken);
-                    continue;
-                }
-
                 var txtFiles = Directory
                     .GetFiles(folderPath, "*.txt")
                     .OrderBy(File.GetCreationTime)
@@ -98,15 +92,11 @@ public class BartenderSimulator(string[] ptfFolders)
                 // Optional: Move to Complete folder after a short delay
                 await Task.Delay(1000, cancellationToken);
 
-                var settings = ConfigurationManager.Current;
-                if (settings != null && Directory.Exists(settings.PrnCompletedDir.Path))
-                {
-                    var finalPath = Path.Combine(
-                        settings.PrnCompletedDir.Path,
-                        $"{baseFileName}.PRN"
-                    );
-                    File.Move(completedPath, finalPath);
-                }
+                var finalPath = Path.Combine(
+                    _pathSchema.PrnCompletedDir.Path,
+                    $"{baseFileName}.PRN"
+                );
+                File.Move(completedPath, finalPath);
             }
         }
         catch (FileNotFoundException)

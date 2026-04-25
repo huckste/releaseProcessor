@@ -1,7 +1,6 @@
-namespace ReleaseProcessor.Services;
+namespace ReleaseProcessor.Processing;
 
 using ReleaseProcessor.Events;
-using ReleaseProcessor.Models;
 
 /// <summary>
 /// Watches PTF folders for status changes (.txt → .Processed → .Failed)

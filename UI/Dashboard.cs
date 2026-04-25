@@ -1,13 +1,14 @@
 using ReleaseProcessor.Configuration;
 using ReleaseProcessor.Events;
-using ReleaseProcessor.Models;
+using ReleaseProcessor.Processing;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
 namespace ReleaseProcessor.UI;
 
-public class Dashboard()
+public class Dashboard(PathSchema pathSchema)
 {
+    private readonly PathSchema _pathSchema = pathSchema;
     private DashboardUpdateEventArgs? _currentState;
     private readonly Spinner _spinner = Spinner.Known.Dots;
     private readonly Spinner _retrySpinner = Spinner.Known.Arc;
@@ -37,7 +38,7 @@ public class Dashboard()
         var layout = new Layout("Root").SplitColumns(new Layout("Left"), new Layout("Right"));
 
         // Left Panel - PTF folder panels with equal ratio (auto-fit to available height)
-        var ptfFolders = ConfigurationManager.Current?.GetPtfDirs() ?? [];
+        var ptfFolders = _pathSchema.GetPtfDirs() ?? [];
 
         var ptfLayouts = ptfFolders
             .Select((folder, i) => new Layout($"PTF{i + 1}").Ratio(1))

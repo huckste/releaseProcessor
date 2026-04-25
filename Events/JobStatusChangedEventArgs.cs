@@ -1,6 +1,6 @@
 namespace ReleaseProcessor.Events;
 
-using ReleaseProcessor.Models;
+using ReleaseProcessor.Processing;
 
 /// <summary>
 /// Raised when a print job's status changes in a PTF folder

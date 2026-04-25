@@ -1,9 +1,8 @@
-namespace ReleaseProcessor.Services;
+namespace ReleaseProcessor.Processing;
 
 using System.Collections.Concurrent;
 using ErrorOr;
 using ReleaseProcessor.Events;
-using ReleaseProcessor.Models;
 
 /// <summary>
 /// Tracks the status of all print jobs and raises events for dashboard updates.
@@ -79,7 +78,6 @@ public class PrintJobTracker(ConcurrentDictionary<string, PrintJob> jobs)
 
         var completed = _completedJobs.Count + _failedJobs.Count + 1;
         var minForEta = Math.Max(1, (int)(_totalJobCount * 0.10));
-
         if (completed >= minForEta)
         {
             var elapsed = (DateTime.Now - _startTime).TotalSeconds;

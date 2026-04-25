@@ -1,19 +1,31 @@
 namespace ReleaseProcessor;
 
-using System.Collections.Concurrent;
 using ErrorOr;
 using ReleaseProcessor.Configuration;
-using ReleaseProcessor.Models;
-using ReleaseProcessor.Services;
+using ReleaseProcessor.Errors;
+using ReleaseProcessor.Processing;
 using ReleaseProcessor.UI;
+using Spectre.Console;
 
 public class ReleaseApp
 {
+    private static PathSchema _pathSchema = new();
+    private static SinglePickScanner? _singlePickScanner;
+
     public static async Task Run()
     {
+        var ensured = EnsureConfig();
+
+        if (ensured.IsError)
+            return;
+
+        _pathSchema = ensured.Value;
+        _singlePickScanner = new SinglePickScanner(_pathSchema);
+
         while (true)
         {
-            var choice = LaunchMenu.Show();
+            AnsiConsole.Clear();
+            var choice = LaunchMenu.Show(_singlePickScanner);
 
             switch (choice)
             {
@@ -22,8 +34,15 @@ public class ReleaseApp
                     break;
 
                 case LaunchMenu.MenuChoice.Configure:
-                    var configMenu = new ConfigurationMenu(ConfigurationManager.Current);
-                    configMenu.Run();
+                    new ConfigurationMenu(_pathSchema).Run();
+
+                    var revalidated = EnsureConfig();
+
+                    if (revalidated.IsError)
+                        return;
+
+                    _pathSchema = revalidated.Value;
+                    _singlePickScanner = new SinglePickScanner(_pathSchema);
                     break;
 
                 case LaunchMenu.MenuChoice.Exit:
@@ -32,39 +51,92 @@ public class ReleaseApp
         }
     }
 
-    private static async Task RunProcessing()
+    private static ErrorOr<PathSchema> EnsureConfig()
     {
-        PathSchema settings = ConfigurationManager.Current!;
-        var candidates = SinglePickScanner.GetUnprocessedFiles();
-
-        if (candidates.Count == 0)
+        if (!ConfigurationManager.ConfigExists())
         {
-            Spectre.Console.AnsiConsole.MarkupLine("[yellow]No files to process.[/]");
-            LaunchMenu.WaitForKey();
-            return;
+            DisplayInfo.Warning(Err.NotFound(Err.NotFoundType.File, "config.json"));
+
+            if (!LaunchMenu.Confirm("Create default configuration?"))
+                return Err.FailedTo(Err.Action.Cancelled, "config setup");
+
+            var created = ConfigurationManager.Create().LogOnError();
+
+            if (created.IsError)
+                return created.Errors;
         }
 
-        var selected = LaunchMenu.ShowFileSelection(candidates);
+        while (true)
+        {
+            var loaded = ConfigurationManager.Load().LogOnError();
 
-        if (selected == "Back")
+            if (loaded.IsError)
+            {
+                if (!LaunchMenu.Confirm("Open configuration menu to fix?"))
+                    return loaded.Errors;
+
+                new ConfigurationMenu(new PathSchema()).Run();
+                continue;
+            }
+
+            var schema = loaded.Value;
+            var validation = ConfigurationManager.ValidatePaths(schema);
+
+            if (!validation.IsError)
+                return schema;
+
+            DisplayInfo.Error(validation.Errors);
+
+            bool onlyMissingDirs = validation.Errors.All(e => e.Code.Contains("NotFound"));
+
+            if (onlyMissingDirs && LaunchMenu.Confirm("Create missing directories?"))
+            {
+                ConfigurationManager.CreateDirectories(schema).LogOnError();
+                continue;
+            }
+
+            if (!LaunchMenu.Confirm("Open configuration menu to fix?"))
+                return validation.Errors;
+
+            new ConfigurationMenu(schema).Run();
+        }
+    }
+
+    private static async Task RunProcessing()
+    {
+        _singlePickScanner = new(_pathSchema);
+
+        var filesResult = _singlePickScanner.GetUnprocessedFiles().LogOnError();
+
+        if (filesResult.IsError)
             return;
 
-        var copiedFile = SinglePickScanner.CopyFile(selected);
-        ConcurrentDictionary<string, PrintJob> jobs = [];
-        var ptfFolders = settings.GetPtfDirs();
+        var menuSelection = LaunchMenu.ShowFileSelection(filesResult.Value);
 
-        CleanupLeftoverFiles(ptfFolders, settings.PrnCompletedDir.Path);
+        if (menuSelection == null)
+            return;
 
-        if (!copiedFile.IsError)
-            jobs = await SinglePickParser.ParseAsync(copiedFile.Value);
+        var copyResult = _singlePickScanner.CopyFile(menuSelection).LogOnError();
+
+        var ptfFolders = _pathSchema.GetPtfDirs();
+
+        CleanupLeftoverFiles(ptfFolders, _pathSchema.PrnCompletedDir.Path);
+
+        if (copyResult.IsError)
+            return;
+
+        var parserResult = await SinglePickParser.ParseAsync(copyResult.Value);
+
+        if (parserResult.IsError)
+            DisplayInfo.Error(parserResult.Errors);
 
         // Assign jobs to PTF folders
-        PtfDistributor.AssignJobsToFolders(jobs, ptfFolders);
+        PtfDistributor.AssignJobsToFolders(parserResult.Value, ptfFolders);
 
         // Setup watchers and tracker
-        var folderWatcher = new FolderWatcher(ptfFolders, settings.PrnCompletedDir.Path);
-        var dashboard = new Dashboard();
-        var jobTracker = new PrintJobTracker(jobs);
+        var folderWatcher = new FolderWatcher(ptfFolders, _pathSchema.PrnCompletedDir.Path);
+        var dashboard = new Dashboard(_pathSchema);
+        var jobTracker = new PrintJobTracker(parserResult.Value);
 
         // Wire up events
         folderWatcher.JobStatusChanged += jobTracker.OnJobStatusChanged;
@@ -83,6 +155,7 @@ public class ReleaseApp
 
         // Track if processing completed successfully
         bool completedSuccessfully = false;
+
         jobTracker.AllJobsCompleted += (s, e) =>
         {
             completedSuccessfully = true;
@@ -90,85 +163,90 @@ public class ReleaseApp
         };
 
         var startTime = DateTime.Now;
-        // var bartenderSim = new BartenderSimulator([.. settings.GetPtfDirs()]);
-        // _ = bartenderSim.Start(cts.Token);
+        var bartenderSim = new BartenderSimulator(_pathSchema);
+        _ = bartenderSim.Start(cts.Token);
 
         // Write job files and start dashboard
         try
         {
-            await PtfDistributor.WriteJobFilesAsync(jobs);
+            await PtfDistributor.WriteJobFilesAsync(parserResult.Value);
             await dashboard.StartDashboard(cts.Token);
         }
         catch (OperationCanceledException)
         {
             // Expected when user presses Ctrl+C or processing completes
-        }
-        finally
-        {
-            var totalTime = DateTime.Now - startTime;
-
-            Task? archiveTask = null;
-
-            if (completedSuccessfully)
+            if (!completedSuccessfully)
             {
-                archiveTask = Task.Run(() => ArchiveAndDeliver(settings, ptfFolders));
-            }
-            else
-            {
-                // Early quit - just delete files, no archive
-                CleanupLeftoverFiles(ptfFolders, settings.PrnCompletedDir.Path);
-            }
+                AnsiConsole.Clear();
 
-            var notifyTask = TeamsNotification.PostAsync(
-                jobTracker.TotalJobs,
-                jobTracker.CompletedCount,
-                jobTracker.FailedCount,
-                totalTime,
-                Path.GetFileName(copiedFile.Value)
-            );
+                DisplayInfo.Warning(Err.FailedTo(Err.Action.Cancelled, "Operation"));
 
-            await EndScreen.Show(
-                jobTracker.TotalJobs,
-                jobTracker.CompletedCount,
-                jobTracker.FailedCount,
-                totalTime,
-                archiveTask,
-                notifyTask
-            );
+                CleanupLeftoverFiles(ptfFolders, _pathSchema.PrnCompletedDir.Path);
+
+                return;
+            }
         }
+
+        var totalTime = DateTime.Now - startTime;
+        Task? archiveTask = null;
+
+        archiveTask = Task.Run(() => ArchiveAndDeliver(_pathSchema, ptfFolders));
+
+        // var notifyTask = TeamsNotification.PostAsync(
+        //     jobTracker.TotalJobs,
+        //     jobTracker.CompletedCount,
+        //     jobTracker.FailedCount,
+        //     totalTime,
+        //     Path.GetFileName(singlePickFileCopy.Value)
+        // );
+
+        Task<string>? notifyTask = null;
+
+        await EndScreen.Show(
+            jobTracker.TotalJobs,
+            jobTracker.CompletedCount,
+            jobTracker.FailedCount,
+            totalTime,
+            archiveTask,
+            notifyTask
+        );
     }
 
     private static void CleanupLeftoverFiles(List<string> ptfFolders, string completedFolder)
     {
-        ArchiveService.ClearFolders(ptfFolders);
-        ArchiveService.ClearFolder(completedFolder);
+        ArchiveService.ClearFolders(ptfFolders).LogOnError();
+        ArchiveService.ClearFolder(completedFolder).LogOnError();
     }
 
     private static void ArchiveAndDeliver(PathSchema settings, List<string> ptfFolders)
     {
         var timestamp = DateTime.Now.ToString("yyyyMMddHHmmss");
 
-        // Archive PTF files (original .txt files now as .Processed)
         var ptfArchivePath = Path.Combine(settings.PtfArchive.Path, $"completed_{timestamp}.zip");
-        var ptfFilesToDelete = ArchiveService.CreateArchive(ptfArchivePath, ptfFolders);
 
-        // Archive PRN files
         var prnArchivePath = Path.Combine(
             settings.PrnArchive.Path,
             $"bartender_prnproc - Copy_PTFPRNFiles_{timestamp}.zip"
         );
+
+        ArchiveService
+            .CreateArchive(ptfArchivePath, ptfFolders)
+            .Then(ArchiveService.DeleteFiles)
+            .LogOnError();
+
         var prnFilesToDelete = ArchiveService.CreateArchive(
             prnArchivePath,
             settings.PrnCompletedDir.Path
         );
 
-        // Move PRN files to delivery folder
-        ArchiveService.MoveFiles(settings.PrnCompletedDir.Path, settings.PrnDeliveryDir.Path);
+        ArchiveService
+            .MoveFiles(settings.PrnCompletedDir.Path, settings.PrnDeliveryDir.Path)
+            .LogOnError();
 
-        ArchiveService.MoveFiles(settings.SinglePickDir.Path, settings.SinglePickArchive.Path);
+        ArchiveService
+            .MoveFiles(settings.SinglePickDir.Path, settings.SinglePickArchive.Path)
+            .LogOnError();
 
-        // Delete archived files
-        ArchiveService.DeleteFiles(ptfFilesToDelete.Value);
-        ArchiveService.DeleteFiles(prnFilesToDelete.Value);
+        ArchiveService.DeleteFiles(prnFilesToDelete.Value).LogOnError();
     }
 }

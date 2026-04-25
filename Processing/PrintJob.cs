@@ -1,4 +1,4 @@
-namespace ReleaseProcessor.Models;
+namespace ReleaseProcessor.Processing;
 
 /// <summary>
 /// Represents a single print job for a carton label.

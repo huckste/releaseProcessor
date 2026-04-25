@@ -1,6 +1,6 @@
 using Spectre.Console;
 
-namespace ReleaseProcessor.Services;
+namespace ReleaseProcessor.Processing;
 
 public class Logger
 {
@@ -10,6 +10,6 @@ public class Logger
     {
         AnsiConsole.WriteException(ex);
         using StreamWriter writer = new(logFilePath, true);
-        writer.WriteLine($"{DateTime.Now}: {message} ({ex})");
+        writer.WriteLine($"{DateTime.Now}: {message}({ex})");
     }
 }

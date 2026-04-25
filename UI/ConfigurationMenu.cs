@@ -1,15 +1,14 @@
 namespace ReleaseProcessor.UI;
 
 using ReleaseProcessor.Configuration;
-using ReleaseProcessor.Models;
 using Spectre.Console;
 
 /// <summary>
 /// Interactive menu for configuring folder paths
 /// </summary>
-public class ConfigurationMenu(PathSchema? existingSettings = null)
+public class ConfigurationMenu(PathSchema pathSchema)
 {
-    private PathSchema _settings = existingSettings ?? new PathSchema();
+    private PathSchema _pathSchema = pathSchema;
 
     public void Run()
     {
@@ -63,7 +62,7 @@ public class ConfigurationMenu(PathSchema? existingSettings = null)
             AnsiConsole.WriteLine();
 
             var choices = new List<string>();
-            var pathsDict = _settings.ToDict();
+            var pathsDict = _pathSchema.ToDict();
 
             foreach (var pathDesc in pathsDict)
             {
@@ -135,19 +134,16 @@ public class ConfigurationMenu(PathSchema? existingSettings = null)
     private void EditPtfCount()
     {
         AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine($"[dim]Current PTF folder count:[/] {_settings.PtfDirCount}");
+        AnsiConsole.MarkupLine($"[dim]Current PTF folder count:[/] {_pathSchema.PtfDirCount}");
         AnsiConsole.WriteLine();
 
-        var input = AnsiConsole.Ask<string>(
-            "[dim]New count 1-10 ([blue]Enter[/] to keep):[/] ",
-            ""
-        );
+        var input = AnsiConsole.Ask("[dim]New count 1-10 ([blue]Enter[/] to keep):[/] ", "");
 
         if (!string.IsNullOrEmpty(input) && int.TryParse(input, out int count))
         {
             if (count >= 1 && count <= 10)
             {
-                _settings.PtfDirCount = count;
+                _pathSchema.PtfDirCount = count;
 
                 AnsiConsole.MarkupLine($"[green]Set to {count}[/]");
             }
@@ -159,49 +155,37 @@ public class ConfigurationMenu(PathSchema? existingSettings = null)
         }
     }
 
-    private bool ValidatePaths()
+    public bool ValidatePaths()
     {
         AnsiConsole.WriteLine();
-        var result = ConfigurationManager.ValidatePaths(_settings);
+        var result = ConfigurationManager.ValidatePaths(_pathSchema);
 
         result.Switch(
             success =>
             {
-                AnsiConsole.MarkupLine("[green]All paths valid[/]");
-                AnsiConsole.WriteLine();
-
-                foreach (var folder in _settings.GetAllPaths())
-                {
-                    string status = "[green]exists[/]";
-                    AnsiConsole.MarkupLine($"  {status}  [dim]{Truncate(folder, 50)}[/]");
-                }
+                DisplayInfo.Success(_pathSchema.GetAllPaths(), "All paths valid");
             },
             errors =>
             {
-                foreach (var error in errors)
-                {
-                    AnsiConsole.MarkupLine($"  [red]{error}[/]");
-                }
+                DisplayInfo.Error(errors);
 
                 AnsiConsole.WriteLine();
 
-                bool isOnlyMissingDirs = errors.All(e => e.Code == "PathSchema.DirectoryNotFound");
+                bool isOnlyMissingDirs = errors.All(e => e.Code.Contains("NotFound"));
 
                 if (isOnlyMissingDirs)
                 {
                     if (AnsiConsole.Confirm("[dim]Create missing directories?[/]", false))
                     {
-                        result = ConfigurationManager.CreateDirectories(_settings);
+                        result = ConfigurationManager.CreateDirectories(_pathSchema);
 
                         if (result.IsError)
-                            foreach (var error in result.Errors)
-                                AnsiConsole.MarkupLine($"[red]{error}");
+                            DisplayInfo.Error(errors);
                     }
                 }
             }
         );
 
-        WaitForKey();
         return false;
     }
 
@@ -209,9 +193,11 @@ public class ConfigurationMenu(PathSchema? existingSettings = null)
     {
         if (AnsiConsole.Confirm("[dim]Load test paths?[/]", false))
         {
-            _settings = PathSchema.Test();
-            AnsiConsole.MarkupLine("[green]Loaded[/]");
-            WaitForKey();
+            _pathSchema = PathSchema.Test();
+
+            AnsiConsole.WriteLine();
+
+            DisplayInfo.Success("Test paths loaded");
         }
         return false;
     }
@@ -220,27 +206,23 @@ public class ConfigurationMenu(PathSchema? existingSettings = null)
     {
         if (AnsiConsole.Confirm("[dim]Load production paths?[/]", false))
         {
-            _settings = PathSchema.Production();
-            AnsiConsole.MarkupLine("[green]Loaded[/]");
-            WaitForKey();
+            _pathSchema = PathSchema.Production();
+
+            AnsiConsole.WriteLine();
+            DisplayInfo.Success("Production paths loaded");
         }
         return false;
     }
 
     private bool Save()
     {
-        var result = ConfigurationManager.Save(_settings);
+        var result = ConfigurationManager.Save(_pathSchema);
 
         result.Switch(
-            success => AnsiConsole.MarkupLine("[green]Saved[/]"),
-            errors =>
-            {
-                foreach (var error in result.Errors)
-                    AnsiConsole.MarkupLine($"[red]{error.Description}[/]");
-            }
+            success => DisplayInfo.Success("Configuration Saved"),
+            errors => DisplayInfo.Error(result.Errors)
         );
 
-        WaitForKey();
         return true;
     }
 

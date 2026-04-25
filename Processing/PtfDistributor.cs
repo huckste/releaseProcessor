@@ -1,7 +1,6 @@
-namespace ReleaseProcessor.Services;
+namespace ReleaseProcessor.Processing;
 
 using System.Collections.Concurrent;
-using ReleaseProcessor.Models;
 
 public static class PtfDistributor
 {

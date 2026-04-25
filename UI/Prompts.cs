@@ -1,6 +1,6 @@
 using Spectre.Console;
 
-namespace ReleaseProcessor.Services;
+namespace ReleaseProcessor.UI;
 
 public class Prompts
 {

@@ -1,4 +1,4 @@
-using ReleaseProcessor.Services;
+using ReleaseProcessor.Processing;
 using Spectre.Console;
 
 namespace ReleaseProcessor.UI;

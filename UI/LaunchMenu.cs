@@ -1,15 +1,14 @@
 namespace ReleaseProcessor.UI;
 
 using ErrorOr;
-using ReleaseProcessor.Configuration;
-using ReleaseProcessor.Models;
-using ReleaseProcessor.Services;
+using ReleaseProcessor.Errors;
+using ReleaseProcessor.Processing;
 using Spectre.Console;
 
 /// <summary>
 /// Main launch menu for selecting Run or Configure mode
 /// </summary>
-public class LaunchMenu
+public class LaunchMenu()
 {
     public enum MenuChoice
     {
@@ -18,10 +17,12 @@ public class LaunchMenu
         Exit,
     }
 
+    private const string _backChoice = "Back";
+
     /// <summary>
     /// Displays the launch menu and returns user's choice
     /// </summary>
-    public static MenuChoice Show()
+    public static MenuChoice Show(SinglePickScanner singlePickScanner)
     {
         AnsiConsole.Clear();
         AnsiConsole.WriteLine();
@@ -32,8 +33,7 @@ public class LaunchMenu
         AnsiConsole.WriteLine();
         AnsiConsole.WriteLine();
 
-        // Config status
-        DisplayConfigStatus();
+        AvailableFilesStatus(singlePickScanner);
 
         AnsiConsole.WriteLine();
         AnsiConsole.WriteLine();
@@ -43,54 +43,35 @@ public class LaunchMenu
         return GetUserChoice();
     }
 
-    private static void DisplayConfigStatus()
+    private static void AvailableFilesStatus(SinglePickScanner singlePickScanner)
     {
-        string status;
-        ErrorOr<Success> configExists = ConfigurationManager.ConfigExists();
+        var files = singlePickScanner.GetUnprocessedFiles();
 
-        if (!configExists.IsError)
+        if (!files.IsError)
         {
-            ErrorOr<PathSchema?> settings = ConfigurationManager.Load();
-
-            if (!settings.IsError && settings.Value != null)
+            if (files.Value.Count == 0)
             {
-                ErrorOr<Success> errors = ConfigurationManager.ValidatePaths(settings.Value);
-
-                int availableFilesCount = SinglePickScanner.GetUnprocessedFiles().Count;
-                string filesReadyText = availableFilesCount > 1 ? "files" : "file";
-
-                status = !errors.IsError
-                    ? $"[green][[{availableFilesCount}]] {filesReadyText} Ready[/]"
-                    : $"[yellow]{errors.Errors.Count} issue(s)[/]";
+                DisplayInfo.Simple(Color.Green, " 0 pending files", "Status");
             }
             else
             {
-                status = "[red]Config error[/]";
+                var label = files.Value.Count != 1 ? "files" : "file";
+                DisplayInfo.Simple(Color.Yellow, $" {files.Value.Count} pending {label}", "Status");
             }
         }
-        else
-        {
-            status = "[red]Not configured[/]";
-        }
-
-        AnsiConsole.Write(new Markup($"[dim]Status:[/] {status}").Centered());
     }
 
-    public static string ShowFileSelection(List<string> files)
+    public static string? ShowFileSelection(List<string> files)
     {
         var choice = AnsiConsole.Prompt(
             new SelectionPrompt<string>()
                 .Title("[bold]Select a file to process[/]")
                 .HighlightStyle(new Style(Color.Blue))
                 .AddChoices([.. files.Select(f => Path.GetFileName(f))])
-                .AddChoices("Back")
+                .AddChoices(_backChoice)
         );
 
-        return choice switch
-        {
-            "Back" => "Back",
-            _ => files.First(f => Path.GetFileName(f) == choice),
-        };
+        return choice == _backChoice ? null : files.First(f => Path.GetFileName(f) == choice);
     }
 
     private static MenuChoice GetUserChoice()
@@ -98,13 +79,17 @@ public class LaunchMenu
         var choice = AnsiConsole.Prompt(
             new SelectionPrompt<string>()
                 .HighlightStyle(new Style(Color.Blue))
-                .AddChoices(["Run", "Configure", "Exit"])
+                .AddChoices(
+                    nameof(MenuChoice.Run),
+                    nameof(MenuChoice.Configure),
+                    nameof(MenuChoice.Exit)
+                )
         );
 
         return choice switch
         {
-            var s when s.Contains("Run") => MenuChoice.Run,
-            var s when s.Contains("Configure") => MenuChoice.Configure,
+            nameof(MenuChoice.Run) => MenuChoice.Run,
+            nameof(MenuChoice.Configure) => MenuChoice.Configure,
             _ => MenuChoice.Exit,
         };
     }

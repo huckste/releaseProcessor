@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace ReleaseProcessor.Models;
+namespace ReleaseProcessor.Configuration;
 
 public class PathSchema
 {
