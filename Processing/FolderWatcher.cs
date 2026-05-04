@@ -28,6 +28,7 @@ public class FolderWatcher
         {
             EnableRaisingEvents = true,
         };
+
         completedWatcher.Created += OnPrnFileCreated;
         _watchers.Add(completedWatcher);
     }

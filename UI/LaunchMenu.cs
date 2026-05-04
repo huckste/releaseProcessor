@@ -1,7 +1,5 @@
 namespace ReleaseProcessor.UI;
 
-using ErrorOr;
-using ReleaseProcessor.Errors;
 using ReleaseProcessor.Processing;
 using Spectre.Console;
 
@@ -19,28 +17,82 @@ public class LaunchMenu()
 
     private const string _backChoice = "Back";
 
-    /// <summary>
-    /// Displays the launch menu and returns user's choice
-    /// </summary>
-    public static MenuChoice Show(SinglePickScanner singlePickScanner)
+    public static async Task<MenuChoice> ShowAsync(
+        SinglePickScanner singlePickScanner,
+        string labelsDir
+    )
     {
-        AnsiConsole.Clear();
-        AnsiConsole.WriteLine();
-        AnsiConsole.WriteLine();
+        using var watcher = new FileSystemWatcher(labelsDir)
+        {
+            Filter = "*.SNGL",
+            EnableRaisingEvents = true,
+        };
 
-        // Title
-        AnsiConsole.Write(new Markup("[bold]Release Processor[/]").Centered());
-        AnsiConsole.WriteLine();
-        AnsiConsole.WriteLine();
+        var cts = new CancellationTokenSource();
 
-        AvailableFilesStatus(singlePickScanner);
+        watcher.Created += (_, _) =>
+        {
+            try
+            {
+                cts.Cancel();
+            }
+            catch (ObjectDisposedException) { }
+        };
 
-        AnsiConsole.WriteLine();
-        AnsiConsole.WriteLine();
-        AnsiConsole.WriteLine();
+        try
+        {
+            while (true)
+            {
+                AnsiConsole.Clear();
+                AnsiConsole.WriteLine();
+                AnsiConsole.WriteLine();
 
-        // Menu
-        return GetUserChoice();
+                // Title
+                AnsiConsole.Write(new Markup("[bold]Release Processor[/]").Centered());
+                AnsiConsole.WriteLine();
+                AnsiConsole.WriteLine();
+
+                AvailableFilesStatus(singlePickScanner);
+
+                AnsiConsole.WriteLine();
+                AnsiConsole.WriteLine();
+                AnsiConsole.WriteLine();
+
+                try
+                {
+                    return await GetUserChoiceAsync(cts.Token);
+                }
+                catch (OperationCanceledException)
+                {
+                    cts.Dispose();
+                    cts = new CancellationTokenSource();
+                    // loop redraws
+                }
+            }
+        }
+        finally
+        {
+            cts.Dispose();
+        }
+    }
+
+    private static async Task<MenuChoice> GetUserChoiceAsync(CancellationToken ct)
+    {
+        var choice = await new SelectionPrompt<string>()
+            .HighlightStyle(new Style(Color.Blue))
+            .AddChoices(
+                nameof(MenuChoice.Run),
+                nameof(MenuChoice.Configure),
+                nameof(MenuChoice.Exit)
+            )
+            .ShowAsync(AnsiConsole.Console, ct);
+
+        return choice switch
+        {
+            nameof(MenuChoice.Run) => MenuChoice.Run,
+            nameof(MenuChoice.Configure) => MenuChoice.Configure,
+            _ => MenuChoice.Exit,
+        };
     }
 
     private static void AvailableFilesStatus(SinglePickScanner singlePickScanner)
@@ -72,26 +124,6 @@ public class LaunchMenu()
         );
 
         return choice == _backChoice ? null : files.First(f => Path.GetFileName(f) == choice);
-    }
-
-    private static MenuChoice GetUserChoice()
-    {
-        var choice = AnsiConsole.Prompt(
-            new SelectionPrompt<string>()
-                .HighlightStyle(new Style(Color.Blue))
-                .AddChoices(
-                    nameof(MenuChoice.Run),
-                    nameof(MenuChoice.Configure),
-                    nameof(MenuChoice.Exit)
-                )
-        );
-
-        return choice switch
-        {
-            nameof(MenuChoice.Run) => MenuChoice.Run,
-            nameof(MenuChoice.Configure) => MenuChoice.Configure,
-            _ => MenuChoice.Exit,
-        };
     }
 
     /// <summary>

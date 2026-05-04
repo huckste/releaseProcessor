@@ -25,7 +25,7 @@ public class ReleaseApp
         while (true)
         {
             AnsiConsole.Clear();
-            var choice = LaunchMenu.Show(_singlePickScanner);
+            var choice = await LaunchMenu.ShowAsync(_singlePickScanner, _pathSchema.LabelsDir.Path);
 
             switch (choice)
             {
@@ -46,6 +46,7 @@ public class ReleaseApp
                     break;
 
                 case LaunchMenu.MenuChoice.Exit:
+                    AnsiConsole.Clear();
                     return;
             }
         }
@@ -58,7 +59,7 @@ public class ReleaseApp
             DisplayInfo.Warning(Err.NotFound(Err.NotFoundType.File, "config.json"));
 
             if (!LaunchMenu.Confirm("Create default configuration?"))
-                return Err.FailedTo(Err.Action.Cancelled, "config setup");
+                return Err.FailedTo(Err.Action.Complete, "config setup");
 
             var created = ConfigurationManager.Create().LogOnError();
 
@@ -179,7 +180,9 @@ public class ReleaseApp
             {
                 AnsiConsole.Clear();
 
-                DisplayInfo.Warning(Err.FailedTo(Err.Action.Cancelled, "Operation"));
+                DisplayInfo.Warning(
+                    Err.FailedTo(Err.Action.Complete, "Process has been cancelled")
+                );
 
                 CleanupLeftoverFiles(ptfFolders, _pathSchema.PrnCompletedDir.Path);
 

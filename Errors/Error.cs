@@ -46,7 +46,7 @@ public static class Err
         Write,
         Copy,
         Find,
-        Cancelled,
+        Complete,
     }
 
     public enum NotFoundType
