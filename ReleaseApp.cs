@@ -191,19 +191,16 @@ public class ReleaseApp
         }
 
         var totalTime = DateTime.Now - startTime;
-        Task? archiveTask = null;
 
-        archiveTask = Task.Run(() => ArchiveAndDeliver(_pathSchema, ptfFolders));
+        Task? archiveTask = Task.Run(() => ArchiveAndDeliver(_pathSchema, ptfFolders));
 
-        // var notifyTask = TeamsNotification.PostAsync(
-        //     jobTracker.TotalJobs,
-        //     jobTracker.CompletedCount,
-        //     jobTracker.FailedCount,
-        //     totalTime,
-        //     Path.GetFileName(singlePickFileCopy.Value)
-        // );
-
-        Task<string>? notifyTask = null;
+        Task<string>? notifyTask = TeamsNotification.PostAsync(
+            jobTracker.TotalJobs,
+            jobTracker.CompletedCount,
+            jobTracker.FailedCount,
+            totalTime,
+            Path.GetFileName(copyResult.Value)
+        );
 
         await EndScreen.Show(
             jobTracker.TotalJobs,
