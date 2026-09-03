@@ -18,7 +18,7 @@ public class PathSchema
         {
             Name = "Labels directory",
             Desc = "Directory where newly added labels are found",
-            ProdRelative = @"\\ind-as84\asroot$\labels",
+            ProdRelative = @"\\SERVER\share$\labels",
             TestRelative = "labels",
         };
 
@@ -27,7 +27,7 @@ public class PathSchema
         {
             Name = "PTF base directory",
             Desc = "Bartender directories where label files are placed",
-            ProdRelative = @"\\ind-as10\BARPRN\PTF",
+            ProdRelative = @"\\SERVER\BARPRN\PTF",
             TestRelative = "PTF",
         };
 
@@ -36,7 +36,7 @@ public class PathSchema
         {
             Name = "PRN build directory",
             Desc = "Build directory for PRN files",
-            ProdRelative = @"\\ind-as10\PrintToFile\Build",
+            ProdRelative = @"\\SERVER\PrintToFile\Build",
             TestRelative = "Build",
         };
 
@@ -45,7 +45,7 @@ public class PathSchema
         {
             Name = "PRN completed directory",
             Desc = "Completed directory for PRN files",
-            ProdRelative = @"\\ind-as10\PrintToFile\Complete",
+            ProdRelative = @"\\SERVER\PrintToFile\Complete",
             TestRelative = "Complete",
         };
 
@@ -63,7 +63,7 @@ public class PathSchema
         {
             Name = "PTF archive directory",
             Desc = "Directory where label files are archived",
-            ProdRelative = @"\\ind-as10\PrintToFile\Archive",
+            ProdRelative = @"\\SERVER\PrintToFile\Archive",
             TestRelative = "PtfArchive",
         };
 
@@ -72,7 +72,7 @@ public class PathSchema
         {
             Name = "PRN archive directory",
             Desc = "Directory where completed PRN files are archived",
-            ProdRelative = @"\\ind-as10\Archive",
+            ProdRelative = @"\\SERVER\Archive",
             TestRelative = "PrnArchive",
         };
 
@@ -140,7 +140,7 @@ public class PathSchema
 
     public void ReleaseDefaults(bool isTest)
     {
-        string testBaseDir = @"/home/huckste/Scripts";
+        string testBaseDir = @"/path/to/Scripts";
 
         foreach (var desc in ToList())
         {
