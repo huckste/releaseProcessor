@@ -140,7 +140,9 @@ public class PathSchema
 
     public void ReleaseDefaults(bool isTest)
     {
-        string testBaseDir = @"/path/to/Scripts";
+        // Test mode works against a sandbox next to the executable, so the app
+        // can be run without any of the production shares mounted.
+        string testBaseDir = Path.Combine(AppContext.BaseDirectory, "TestRoot");
 
         foreach (var desc in ToList())
         {

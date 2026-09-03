@@ -19,8 +19,11 @@ public static class ConfigurationManager
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
+    // A new config starts on the test sandbox next to the executable. The
+    // production paths are site specific and are set from the configuration
+    // menu, so defaulting to them only produces a config that cannot validate.
     public static ErrorOr<Success> Create() =>
-        Save(PathSchema.Production()).Then(r => Result.Success);
+        Save(PathSchema.Test()).Then(r => Result.Success);
 
     public static ErrorOr<PathSchema> Load() =>
         Safely.Run(
