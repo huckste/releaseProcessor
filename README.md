@@ -1,5 +1,7 @@
 # ReleaseProcessor
 
+![ReleaseProcessor demo](docs/demo.gif)
+
 A terminal application for releasing carton label print jobs in a book distribution warehouse, and watching them through to completion.
 
 Labels are printed by BarTender, which picks work up out of a set of folders. Feeding it meant splitting a release file by hand, dropping the pieces into those folders, and then watching a file explorer to see whether anything came back. A stuck job was invisible until someone noticed the floor had gone quiet.
