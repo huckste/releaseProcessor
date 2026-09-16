@@ -44,10 +44,4 @@ UI/              LaunchMenu, Dashboard, ConfigurationMenu, DisplayInfo, EndScree
 
 `PathSchema` holds every directory the app needs, each with a description, a production path, and a test path. Paths are edited from the configuration menu and stored in `config.json`; nothing is hard-coded at a call site.
 
-## Running
-
-```
-dotnet run
-```
-
 .NET 10. Dependencies: Spectre.Console, ErrorOr. Formatting is csharpier - `dotnet tool restore` then `dotnet csharpier .`.
